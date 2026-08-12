@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no,maximum-scale=1">
+<title>航运特训 · Seacon</title>
+<meta name="description" content="航运投资知识特训——分模块闯关，快速掌握船型、租约、保险、周期与测算。">
+<meta name="theme-color" content="#0b5c8a">
+<!-- iOS 全屏 App 模式 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="航运特训">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- ══════ 顶栏 ══════ -->
+<div class="top" id="top">
+  <div class="stat" style="color:var(--gold)"><i>🔥</i><span id="sStreak">0</span></div>
+  <div class="stat" style="color:var(--sky)"><i>⭐</i><span id="sXp">0</span></div>
+  <div class="sp"></div>
+  <div class="stat" style="color:var(--bad)"><i>❤️</i><span id="sHeart">5</span></div>
+</div>
+
+<!-- ══════ 学习路径 ══════ -->
+<div class="page on" id="pLearn"><div class="wrap" id="pathBox"></div></div>
+
+<!-- ══════ 错题本 ══════ -->
+<div class="page" id="pReview"><div class="wrap">
+  <h2 style="margin:20px 0 4px;font-size:22px">错题本</h2>
+  <p class="tiny" style="margin-bottom:14px">答错的题会自动收进来。<b>想不起来再翻，那一下才是真正在记忆。</b></p>
+  <div id="reviewBox"></div>
+</div></div>
+
+<!-- ══════ 术语 ══════ -->
+<div class="page" id="pTerms"><div class="wrap">
+  <h2 style="margin:20px 0 4px;font-size:22px">术语速查</h2>
+  <p class="tiny">全部 <b id="tCount">0</b> 条，中英文都能搜。</p>
+  <input class="search" id="tSearch" placeholder="搜术语、缩写或中文…　例：BBC / 停租 / 干舷" autocomplete="off">
+  <div id="termBox"></div>
+</div></div>
+
+<!-- ══════ 我的 ══════ -->
+<div class="page" id="pMe"><div class="wrap">
+  <h2 style="margin:20px 0 12px;font-size:22px">我的</h2>
+  <div class="card">
+    <div class="kv"><span>连续学习</span><b id="mStreak">0 天</b></div>
+    <div class="kv"><span>累计经验</span><b id="mXp">0 XP</b></div>
+    <div class="kv"><span>完成课程</span><b id="mDone">0 / 0</b></div>
+    <div class="kv"><span>错题待复习</span><b id="mWrong">0 道</b></div>
+  </div>
+  <div class="card">
+    <h3>装到 iPhone 主屏</h3>
+    <p>Safari 打开本页 → 点底部<b>分享</b>按钮 → 选<b>「添加到主屏幕」</b>。
+       之后从主屏图标进入就是全屏 App，<b>断网也能用</b>。</p>
+  </div>
+  <div class="card">
+    <h3>怎么练最有效</h3>
+    <p>每天一节，<b>连续比时长重要</b>。答错不要跳过——<b>错题本里的题，才是你真正的知识边界</b>。
+       每个单元刷完再回头做一遍错题，比重头再刷一遍效率高得多。</p>
+  </div>
+  <div class="card">
+    <h3>关于内容</h3>
+    <p class="tiny">题目来自《主流船型必须搞懂的知识白皮书》。案例中的市场假设（日租金、OPEX、船价、运费率）
+       均为<b>示意</b>，用于建立量级直觉，不作为测算依据。本 App <b>不含</b>公司未公开的船队明细与合同价格。</p>
+  </div>
+  <button class="btn ghost" id="reset" style="margin-top:18px">清空进度重新开始</button>
+  <p class="tiny" style="text-align:center;margin-top:14px">Seacon Shipping / GVMI · 内部培训用</p>
+</div></div>
+
+<!-- ══════ 课程界面 ══════ -->
+<div id="lesson">
+  <div class="lhead">
+    <button id="quit" style="font-size:24px;color:var(--ink3);line-height:1">✕</button>
+    <div class="bar"><i id="lbar" style="width:0"></i></div>
+    <div class="hearts" id="lhearts">❤️❤️❤️❤️❤️</div>
+  </div>
+  <div class="lbody"><div class="in" id="lbody"></div></div>
+  <div class="fb" id="fb"><div class="in">
+    <div class="fbmsg" id="fbmsg" style="display:none"></div>
+    <button class="btn" id="act" disabled>选一个答案</button>
+  </div></div>
+</div>
+
+<!-- ══════ 底部导航 ══════ -->
+<div class="nav" id="nav">
+  <button data-p="pLearn" class="on"><i>🎯</i>学习</button>
+  <button data-p="pReview"><i>🔁</i>错题</button>
+  <button data-p="pTerms"><i>📖</i>术语</button>
+  <button data-p="pMe"><i>👤</i>我的</button>
+</div>
+
+<script src="data.js"></script>
+<script src="terms.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
