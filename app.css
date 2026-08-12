@@ -155,6 +155,9 @@ button{ font:inherit; color:inherit; border:0; background:none; cursor:pointer; 
 .done .big{ font-size:64px; }
 .done h2{ font-size:26px; margin:10px 0 6px; }
 .done p{ color:var(--ink2); font-size:14.5px; margin:0 0 24px; }
+.done p.hint{ margin:16px 0 0; padding:11px 13px; background:var(--sunk);
+  border-left:3px solid var(--gold); border-radius:8px;
+  font-size:12.5px; line-height:1.6; text-align:left; }
 .rewards{ display:flex; gap:12px; justify-content:center; margin-bottom:28px; }
 .rw{ flex:1; max-width:150px; border:2px solid var(--gold); border-radius:16px; overflow:hidden; }
 .rw b{ display:block; background:var(--gold); color:#fff; font-size:11.5px; padding:4px; letter-spacing:.08em; }

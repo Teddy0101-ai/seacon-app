@@ -1,5 +1,5 @@
 // 航运特训 · 离线缓存（版本号由构建脚本按内容哈希生成，改代码自动失效旧缓存）
-const V = 'seacon-drill-aaf3434b0d';
+const V = 'seacon-drill-87451479dc';
 const FILES = ['./','./index.html','./app.css','./app.js','./data.js','./terms.js',
                './manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png',
                './icons/apple-touch-icon.png'];

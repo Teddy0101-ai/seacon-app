@@ -12,18 +12,18 @@ var KEY = "seacon-drill-v1";
 /* ── 状态 ──────────────────────────────────────────────── */
 var S = load();
 function load() {
-  var d = { xp: 0, streak: 0, last: "", done: {}, wrong: [], hearts: 5, hDay: "" };
+  var d = { xp: 0, streak: 0, last: "", done: {}, wrong: [] };
   try { var raw = localStorage.getItem(KEY); if (raw) d = Object.assign(d, JSON.parse(raw)); } catch (e) {}
   return d;
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 function today() { return new Date().toISOString().slice(0, 10); }
 
-// 每天回满心；连续天数在完成一节课时才推进
-(function dayTick() {
-  var t = today();
-  if (S.hDay !== t) { S.hearts = 5; S.hDay = t; save(); }
-})();
+// 心数改成「每节课 5 颗」，不再按天锁死。
+// 原来的做法有两个问题：① 每天最多只允许错 5 次，而错误恰恰是学习价值最高的事件；
+// ② 心数归零后 run.hp 一直是 0，即使全部答对也过不了任何一节课，App 到第二天才能用。
+// 现在错误的代价改成「当场回炉多做两遍」——这既不砖掉 App，又把重复放在了正确的位置。
+delete S.hearts; delete S.hDay;
 
 function bumpStreak() {
   var t = today();
@@ -36,10 +36,29 @@ function bumpStreak() {
 var allLessons = [];
 C.forEach(function (u) { u.L.forEach(function (l, i) { allLessons.push(u.id + "-" + i); }); });
 
+// 题目 id → 题目对象。错题本只存 id，不存对象本身——
+// 对象经 localStorage 的 JSON 往返后会变成一个新副本，用 === 永远比不上原题，
+// 于是跨会话答错同一题会重复堆积、复习答对也移不出去。存 id 就没这个问题。
+var QMAP = {};
+C.forEach(function (u) {
+  u.L.forEach(function (l) { l.q.forEach(function (q) { if (q.id) QMAP[q.id] = q; }); });
+});
+function byId(w) { return QMAP[typeof w === "string" ? w : (w && (w.id || (w.q && w.q.id)))]; }
+// 旧版本存的是对象，这里把遗留数据迁成 id，顺便去重
+(function migrateWrong() {
+  var seen = {}, out = [];
+  (S.wrong || []).forEach(function (w) {
+    var q = byId(w) || (w && w.q && QMAP[w.q.id]);
+    var id = q && q.id;
+    if (id && !seen[id]) { seen[id] = 1; out.push({ id: id, t: (w && w.t) || Date.now() }); }
+  });
+  if (out.length !== (S.wrong || []).length) { S.wrong = out; save(); } else { S.wrong = out; }
+})();
+
 function paintTop() {
   $("#sStreak").textContent = S.streak;
   $("#sXp").textContent = S.xp;
-  $("#sHeart").textContent = S.hearts;
+  $("#sHeart").textContent = S.wrong.length;
   $("#mStreak").textContent = S.streak + " 天";
   $("#mXp").textContent = S.xp + " XP";
   $("#mDone").textContent = Object.keys(S.done).length + " / " + allLessons.length;
@@ -88,14 +107,17 @@ var run = null;
 function start(lid, fromReview) {
   var qs;
   if (fromReview) {
-    qs = S.wrong.slice(0, 8).map(function (w) { return w.q; });
+    // 按答错时间最久的优先，最多 8 道
+    qs = S.wrong.slice(0, 8).map(byId).filter(Boolean);
     if (!qs.length) return;
   } else {
     var p = lid.split("-"), u = C.filter(function (x) { return x.id === p[0]; })[0];
     if (!u) return;
-    qs = u.L[+p[1]].q;
+    qs = u.L[+p[1]].q.slice();   // 复制一份：答错要往里插回炉题，不能改到原题库
   }
-  run = { lid: lid, rev: !!fromReview, qs: qs, i: 0, ok: 0, hp: S.hearts, picked: null, checked: false, pairState: null };
+  // 心数每节课重置，不跨天累计
+  run = { lid: lid, rev: !!fromReview, qs: qs, i: 0, ok: 0, first: 0, asked: 0,
+          hp: 5, picked: null, checked: false, pairState: null, seen: {} };
   $("#lesson").classList.add("on");
   document.body.style.overflow = "hidden";
   paintQ();
@@ -246,20 +268,32 @@ $("#act").addEventListener("click", function () {
       });
     }
 
+    // 首答正确率：回炉重做的不计入，否则结算页会把「多做两遍才对」显示成高分
+    if (!run.seen[q.id]) { run.asked++; if (right) run.first++; }
+
     var fb = $("#fb"), msg = $("#fbmsg");
     if (right) {
       run.ok++;
       fb.className = "fb ok";
       msg.innerHTML = '<span class="ic">✅</span><div><b>答对了</b>' +
         (q.w ? '<div class="why">' + q.w + "</div>" : "") + "</div>";
-      // 复习模式答对则移出错题本
-      if (run.rev) S.wrong = S.wrong.filter(function (w) { return w.q !== q; });
+      // 复习模式答对才移出错题本（按 id 比较，跨会话也有效）
+      if (run.rev) S.wrong = S.wrong.filter(function (w) { return w.id !== q.id; });
     } else {
-      run.hp--; S.hearts = Math.max(0, run.hp);
+      run.hp--;
       fb.className = "fb err";
       msg.innerHTML = '<span class="ic">❌</span><div><b>再看一眼</b>' +
         (q.w ? '<div class="why">' + q.w + "</div>" : "") + "</div>";
-      if (!S.wrong.some(function (w) { return w.q === q; })) S.wrong.push({ q: q, t: Date.now() });
+      if (q.id && !S.wrong.some(function (w) { return w.id === q.id; }))
+        S.wrong.push({ id: q.id, t: Date.now() });
+      // 当场回炉：把这道题插回本轮队列的 +3 和 +9 位——
+      // 答错的代价是「多做两遍」，不是「今天不许再学」。
+      // 隔 3 题、隔 9 题本身就是最短的两级间隔，重复被放在了正确的位置。
+      if (!run.rev && !run.seen[q.id]) {
+        run.seen[q.id] = 1;
+        run.qs.splice(Math.min(run.i + 3, run.qs.length), 0, q);
+        run.qs.splice(Math.min(run.i + 9, run.qs.length), 0, q);
+      }
       $("#lhearts").textContent = hearts(run.hp);
     }
     msg.style.display = "flex";
@@ -286,13 +320,23 @@ function finish(cleared) {
   save();
   $("#lbar").style.width = "100%";
   $("#fb").className = "fb"; $("#fbmsg").style.display = "none";
+  // 显示「首答正确率」而不是总正确率：回炉重做的不算。
+  // 一个答错三次、回炉后蒙对的人，本来会看到 100%，那是最有害的一种反馈——
+  // 它把「知道自己不会」的人变成「以为自己会」的人。
+  var fr = run.asked ? Math.round(run.first / run.asked * 100) : 0;
+  var redo = run.asked - run.first;
   $("#lbody").innerHTML =
     '<div class="done"><div class="big">' + (cleared ? "🎉" : "💪") + "</div>" +
-    "<h2>" + (cleared ? "这一节拿下了" : "心用完了，下次再来") + "</h2>" +
-    "<p>" + (cleared ? "答对 " + run.ok + " / " + run.qs.length + " 题"
-                     : "错过的题已经收进错题本，明天心会回满") + "</p>" +
+    "<h2>" + (cleared ? "这一节拿下了" : "错太多了，先看看解析") + "</h2>" +
+    "<p>" + (cleared
+      ? (redo ? "有 " + redo + " 道是回炉之后才对的，它们已经进了错题本"
+              : "全部一次答对，干净利落")
+      : "错过的题都在错题本里，随时可以重来——不用等明天") + "</p>" +
     '<div class="rewards"><div class="rw"><b>获得经验</b><span>+' + xp + "</span></div>" +
-    '<div class="rw g"><b>正确率</b><span>' + Math.round(run.ok / run.qs.length * 100) + "%</span></div></div></div>";
+    '<div class="rw g"><b>首答正确率</b><span>' + fr + "%</span></div></div>" +
+    (redo ? '<p class="hint">首答正确率只算第一次的答案。' +
+            '<b>回炉做对不等于会</b>——那道题真正的考验是三天以后。</p>' : "") +
+    "</div>";
   var a = $("#act"); a.className = "btn on"; a.textContent = "回到路径"; a.disabled = false;
   a.onclick = function () { a.onclick = null; quit(); };
 }
@@ -313,7 +357,8 @@ function paintReview() {
   box.innerHTML = '<button class="btn on" id="revGo" style="margin-bottom:16px">开始复习 ' +
     Math.min(8, S.wrong.length) + " 道</button>" +
     S.wrong.slice(0, 30).map(function (w) {
-      var q = w.q;
+      var q = byId(w);
+      if (!q) return "";
       var stem = q.k === "pair" ? "配对：" + q.p.map(function (p) { return p[0]; }).join(" / ") : q.q;
       return '<div class="tcard"><div class="t">' + stem + '</div>' +
              (q.w ? '<div class="d">' + q.w + "</div>" : "") + "</div>";
