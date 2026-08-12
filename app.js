@@ -116,17 +116,31 @@ function paintQ() {
   var fb = $("#fb"); fb.className = "fb"; $("#fbmsg").style.display = "none";
   var act = $("#act"); act.className = "btn"; act.disabled = true;
 
+  // 情景前情：多步决策题共用的一段叙述
+  var pre = q.pre ? '<div class="scene">' + q.pre + "</div>" : "";
+
   var body = "";
   if (q.k === "tf") {
     act.textContent = "选一个答案";
-    body = '<div class="qtype">判断题</div><div class="qtext">' + q.q + "</div>" +
+    body = pre + '<div class="qtype">判断题</div><div class="qtext">' + q.q + "</div>" +
       '<div class="opts"><button class="opt" data-v="1">✓　对</button>' +
       '<button class="opt" data-v="0">✗　错</button></div>';
-  } else if (q.k === "mc" || q.k === "bank") {
+  } else if (q.k === "mc" || q.k === "bank" || q.k === "num") {
     act.textContent = "选一个答案";
-    body = '<div class="qtype">' + (q.k === "bank" ? "填空题" : "选择题") + "</div>" +
+    var label = q.k === "bank" ? "填空题" : (q.k === "num" ? "数量级判断" : "选择题");
+    body = pre + '<div class="qtype">' + label + "</div>" +
       '<div class="qtext">' + q.q + "</div><div class=\"opts\">" +
       q.o.map(function (o, i) { return '<button class="opt" data-v="' + i + '">' + esc(o) + "</button>"; }).join("") +
+      "</div>";
+  } else if (q.k === "order") {
+    // 排序题：按正确顺序依次点，点错立刻标红
+    act.textContent = "按顺序全部点完";
+    run.orderState = { picked: [], err: false };
+    var items = q.o.map(function (o, i) { return { t: o, i: i }; });
+    shuffle(items);
+    body = pre + '<div class="qtype">排序题</div><div class="qtext">' + q.q + "</div>" +
+      '<div class="orderslots" id="oslots"></div><div class="opts">' +
+      items.map(function (x) { return '<button class="opt oi" data-v="' + x.i + '">' + esc(x.t) + "</button>"; }).join("") +
       "</div>";
   } else if (q.k === "pair") {
     act.textContent = "全部配对后继续";
@@ -134,7 +148,7 @@ function paintQ() {
     var R = q.p.map(function (p, i) { return { t: p[1], i: i }; });
     shuffle(R);
     run.pairState = { left: L, right: R, sel: null, matched: 0 };
-    body = '<div class="qtype">配对题</div><div class="qtext" style="font-size:18px">把左右两边连起来</div>' +
+    body = pre + '<div class="qtype">配对题</div><div class="qtext" style="font-size:18px">把左右两边连起来</div>' +
       '<div class="pairgrid"><div class="pcol">' +
       L.map(function (x) { return '<button class="pi" data-s="L" data-i="' + x.i + '">' + esc(x.t) + "</button>"; }).join("") +
       '</div><div class="pcol">' +
@@ -151,8 +165,28 @@ $("#lbody").addEventListener("click", function (e) {
   if (!run) return;
   var q = run.qs[run.i];
 
+  // 排序题：依次点击，顺序错了当场标红并记一次错
+  var oi = e.target.closest(".oi");
+  if (oi && q.k === "order" && !run.checked) {
+    var st = run.orderState, want = st.picked.length;
+    if (+oi.dataset.v === want) {
+      oi.classList.add("gone"); st.picked.push(want);
+      $("#oslots").innerHTML = st.picked.map(function (i, n) {
+        return '<span class="oslot">' + (n + 1) + ". " + esc(q.o[i]) + "</span>";
+      }).join("");
+      if (st.picked.length === q.o.length) {
+        var a3 = $("#act"); a3.disabled = false; a3.className = "btn on"; a3.textContent = "继续";
+        run.picked = 1;
+      }
+    } else {
+      st.err = true; oi.classList.add("err");
+      setTimeout(function () { oi.classList.remove("err"); }, 480);
+    }
+    return;
+  }
+
   var o = e.target.closest(".opt");
-  if (o && !run.checked) {
+  if (o && !run.checked && q.k !== "order") {
     $$("#lbody .opt").forEach(function (x) { x.classList.remove("sel"); });
     o.classList.add("sel");
     run.picked = +o.dataset.v;
@@ -199,10 +233,11 @@ $("#act").addEventListener("click", function () {
     run.checked = true;
     var right;
     if (q.k === "pair") right = !run.pairErr;
+    else if (q.k === "order") right = !(run.orderState && run.orderState.err);
     else right = (run.picked === q.a);
     run.pairErr = false;
 
-    if (q.k !== "pair") {
+    if (q.k !== "pair" && q.k !== "order") {
       $$("#lbody .opt").forEach(function (x) {
         var v = +x.dataset.v;
         if (v === q.a) x.classList.add("ok");

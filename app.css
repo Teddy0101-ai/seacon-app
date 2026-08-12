@@ -115,6 +115,18 @@ button{ font:inherit; color:inherit; border:0; background:none; cursor:pointer; 
 .opt.ok{ border-color:var(--go); box-shadow:0 3px 0 var(--go-d); background:var(--go-bg); }
 .opt.err{ border-color:var(--bad); box-shadow:0 3px 0 var(--bad-d); background:var(--bad-bg); }
 
+/* 情景前情 */
+.scene{ background:var(--sunk); border-left:4px solid var(--brand2); border-radius:0 14px 14px 0;
+        padding:13px 15px; margin:14px 0 4px; font-size:14px; line-height:1.65; color:var(--ink2); }
+.scene b{ color:var(--ink); }
+
+/* 排序题已选槽位 */
+.orderslots{ display:flex; flex-wrap:wrap; gap:7px; margin-bottom:14px; min-height:8px; }
+.oslot{ background:var(--go-bg); border:2px solid var(--go); color:var(--go-d);
+        border-radius:11px; padding:6px 11px; font-size:13px; font-weight:700; }
+@media (prefers-color-scheme: dark){ .oslot{ color:#57d79a; } }
+.opt.gone{ opacity:.25; pointer-events:none; border-style:dashed; box-shadow:none; }
+
 /* 配对题 */
 .pairgrid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .pcol{ display:grid; gap:10px; align-content:start; }
