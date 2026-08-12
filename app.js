@@ -12,7 +12,7 @@ var KEY = "seacon-drill-v1";
 /* ── 状态 ──────────────────────────────────────────────── */
 var S = load();
 function load() {
-  var d = { xp: 0, streak: 0, last: "", done: {}, wrong: [] };
+  var d = { xp: 0, streak: 0, last: "", done: {}, wrong: [], srs: {} };
   try { var raw = localStorage.getItem(KEY); if (raw) d = Object.assign(d, JSON.parse(raw)); } catch (e) {}
   return d;
 }
@@ -68,12 +68,18 @@ function paintTop() {
 /* ── 学习路径 ──────────────────────────────────────────── */
 function paintPath() {
   var firstOpen = null;
-  var h = C.map(function (u) {
+  var h = C.map(function (u, ui) {
     var dn = u.L.filter(function (_, i) { return S.done[u.id + "-" + i]; }).length;
+    // 单元级解锁：上一单元做完 70% 才开这一单元。
+    // 原来只判 i === 0，而那个条件对每个单元都成立——11 个单元的第一节全部一开始就开着，
+    // 等于 11 条并行赛道，精心排的难度曲线被这一行取消了。
+    var pu = C[ui - 1];
+    var prevOK = !pu || pu.L.filter(function (_, k) { return S.done[pu.id + "-" + k]; }).length
+                        >= Math.ceil(pu.L.length * 0.7);
     var nodes = u.L.map(function (l, i) {
       var id = u.id + "-" + i, done = !!S.done[id];
       // 顺序解锁：本单元前一节做完才开下一节
-      var open = done || i === 0 || !!S.done[u.id + "-" + (i - 1)];
+      var open = done || (prevOK && (i === 0 || !!S.done[u.id + "-" + (i - 1)]));
       if (open && !done && !firstOpen) firstOpen = id;
       var cls = done ? "done" : (open ? (firstOpen === id ? "now" : "") : "lock");
       var ic = done ? "★" : (open ? "▶" : "🔒");
@@ -107,9 +113,18 @@ var run = null;
 function start(lid, fromReview) {
   var qs;
   if (fromReview) {
-    // 按答错时间最久的优先，最多 8 道
-    qs = S.wrong.slice(0, 8).map(byId).filter(Boolean);
-    if (!qs.length) return;
+    // 错题优先（它们是最弱的），再补到期复习，最多 12 道，然后交错打散
+    var picked = {}, list = [];
+    S.wrong.forEach(function (w) {
+      var q = byId(w);
+      if (q && !picked[q.id] && list.length < 8) { picked[q.id] = 1; list.push(q); }
+    });
+    dueIds().forEach(function (id) {
+      var q = QMAP[id];
+      if (q && !picked[id] && list.length < 12) { picked[id] = 1; list.push(q); }
+    });
+    if (!list.length) return;
+    qs = interleave(list);
   } else {
     var p = lid.split("-"), u = C.filter(function (x) { return x.id === p[0]; })[0];
     if (!u) return;
@@ -117,6 +132,7 @@ function start(lid, fromReview) {
   }
   // 心数每节课重置，不跨天累计
   run = { lid: lid, rev: !!fromReview, qs: qs, i: 0, ok: 0, first: 0, asked: 0,
+          prodN: 0, prodOk: 0,
           hp: 5, picked: null, checked: false, pairState: null, seen: {} };
   $("#lesson").classList.add("on");
   document.body.style.overflow = "hidden";
@@ -129,6 +145,66 @@ function quit() {
 }
 
 function hearts(n) { return "❤️".repeat(Math.max(0, n)) + "🖤".repeat(Math.max(0, 5 - n)); }
+
+/* ── 间隔重复 ────────────────────────────────────────────
+   原来的做法有个教科书级的反例：错题在错题本里答对一次就被永久删除，
+   而复习入口随时可点——典型路径是「答错 → 看解释 → 30 秒后答对 → 永久毕业」。
+   那次答对时答案还在工作记忆里，不提供任何长期记忆证据。
+   下面是 SM-2 的压缩版：答错必须重新走学习步，答对间隔递增。
+   SPEED 0.6 是速成压缩系数——目标 6—8 周成型，不是五年。            */
+var SPEED = 0.6;
+function srsGet(id) {
+  return S.srs[id] || { e: 2.5, ivl: 0, due: 0, reps: 0, lapses: 0, step: 0, last: 0 };
+}
+function srsUpdate(id, right, selfGrade) {
+  if (!id) return;
+  var now = Date.now(), st = srsGet(id);
+  if (!right) {
+    st.lapses++;
+    st.e = Math.max(1.3, st.e - 0.2);
+    st.step = 0;
+    st.ivl = 10 / 1440;                       // 10 分钟后才可能再出现，不当场毕业
+    if (selfGrade === 0) st.e = Math.max(1.3, st.e - 0.1);   // 完全说不出来，降得更狠
+  } else if (st.step === 0) {
+    st.step = 1; st.ivl = 1;                  // 学习步毕业：1 天
+  } else {
+    st.reps++;
+    st.ivl = st.reps === 1 ? 3 : Math.max(1, Math.round(st.ivl * st.e * SPEED));
+    st.e = Math.min(2.8, st.e + 0.1);
+  }
+  st.ivl = st.ivl * (0.9 + Math.random() * 0.2);   // ±10% 抖动，防止同一天堆一堆
+  st.due = now + st.ivl * 864e5;
+  st.last = now;
+  S.srs[id] = st;
+}
+// 到期的题，逾期越久越靠前
+function dueIds() {
+  var now = Date.now(), out = [];
+  for (var id in S.srs) {
+    var st = S.srs[id];
+    if (QMAP[id] && st.due && st.due <= now)
+      out.push({ id: id, over: (now - st.due) / (st.ivl * 864e5 || 1) });
+  }
+  out.sort(function (a, b) { return b.over - a.over; });
+  return out.map(function (x) { return x.id; });
+}
+// 交错：相邻两题尽量不同单元、不同题型。
+// 每节课连着考同一主题时，做到第三题就已经靠上下文提示而不是提取了。
+function interleave(a) {
+  for (var pass = 0; pass < 40; pass++) {
+    var ok = true;
+    for (var i = 1; i < a.length; i++) {
+      var same = (a[i].id || "").split("-")[0] === (a[i - 1].id || "").split("-")[0]
+              || a[i].k === a[i - 1].k;
+      if (same) {
+        var j = i + 1 + ((Math.random() * Math.max(1, a.length - i - 1)) | 0);
+        if (j < a.length) { var t = a[i]; a[i] = a[j]; a[j] = t; ok = false; }
+      }
+    }
+    if (ok) break;
+  }
+  return a;
+}
 
 function paintQ() {
   var q = run.qs[run.i];
@@ -164,6 +240,18 @@ function paintQ() {
       '<div class="orderslots" id="oslots"></div><div class="opts">' +
       items.map(function (x) { return '<button class="opt oi" data-v="' + x.i + '">' + esc(x.t) + "</button>"; }).join("") +
       "</div>";
+  } else if (q.k === "prod") {
+    // 产出题：不给选项。先自己说，再对答案，三档自评。
+    // 这是全库唯一训练「提取」而不是「再认」的题型——
+    // 老板问「这条船的红线日租是多少」时，你不能说「给我四个选项」。
+    act.textContent = "写完了，看答案";
+    act.disabled = false; act.className = "btn on";
+    run.revealed = false;
+    body = pre + '<div class="qtype prod">产出题 · 不给选项</div>' +
+      '<div class="qtext">' + q.q + "</div>" +
+      '<textarea class="pin" id="pin" rows="4" ' +
+      'placeholder="写下来，或者对着屏幕说一遍 —— 说完再点下面。&#10;想不起来也先写你记得的那部分，空着点开答案等于没练。"></textarea>' +
+      '<div id="model"></div>';
   } else if (q.k === "pair") {
     act.textContent = "全部配对后继续";
     var L = q.p.map(function (p, i) { return { t: p[0], i: i }; });
@@ -207,8 +295,18 @@ $("#lbody").addEventListener("click", function (e) {
     return;
   }
 
+  // 产出题自评：2 = 全说出来了，1 = 说出一半，0 = 说不出来
+  var g = e.target.closest(".selfgrade .opt");
+  if (g && q.k === "prod" && !run.checked) {
+    $$("#lbody .selfgrade .opt").forEach(function (x) { x.classList.remove("sel"); });
+    g.classList.add("sel");
+    run.picked = +g.dataset.g;
+    var ag = $("#act"); ag.disabled = false; ag.className = "btn on"; ag.textContent = "继续";
+    return;
+  }
+
   var o = e.target.closest(".opt");
-  if (o && !run.checked && q.k !== "order") {
+  if (o && !run.checked && q.k !== "order" && q.k !== "prod") {
     $$("#lbody .opt").forEach(function (x) { x.classList.remove("sel"); });
     o.classList.add("sel");
     run.picked = +o.dataset.v;
@@ -251,15 +349,35 @@ $("#act").addEventListener("click", function () {
   if (!run) return;
   var q = run.qs[run.i];
 
+  // 产出题第一步：揭示参考要点 + 三档自评。此时还不判分。
+  if (q.k === "prod" && !run.revealed) {
+    run.revealed = true;
+    var ta = $("#pin"); if (ta) ta.disabled = true;
+    $("#model").innerHTML =
+      '<div class="model"><div class="mh">参考要点 · 对照你刚才说的</div>' +
+      q.m.map(function (p, i) {
+        return '<div class="mp"><b>' + (i + 1) + "</b><span>" + p + "</span></div>";
+      }).join("") + "</div>" +
+      '<div class="qtype" style="margin-top:16px">这 ' + q.m.length + ' 条，你说到了几条？</div>' +
+      '<div class="opts selfgrade">' +
+      '<button class="opt" data-g="2">基本都说出来了</button>' +
+      '<button class="opt" data-g="1">说出一半</button>' +
+      '<button class="opt" data-g="0">说不出来</button></div>';
+    this.disabled = true; this.className = "btn"; this.textContent = "上面选一个自评";
+    $("#lbody").scrollTop = $("#lbody").scrollHeight;
+    return;
+  }
+
   if (!run.checked) {
     run.checked = true;
     var right;
     if (q.k === "pair") right = !run.pairErr;
     else if (q.k === "order") right = !(run.orderState && run.orderState.err);
+    else if (q.k === "prod") right = (run.picked === 2);
     else right = (run.picked === q.a);
     run.pairErr = false;
 
-    if (q.k !== "pair" && q.k !== "order") {
+    if (q.k !== "pair" && q.k !== "order" && q.k !== "prod") {
       $$("#lbody .opt").forEach(function (x) {
         var v = +x.dataset.v;
         if (v === q.a) x.classList.add("ok");
@@ -269,20 +387,30 @@ $("#act").addEventListener("click", function () {
     }
 
     // 首答正确率：回炉重做的不计入，否则结算页会把「多做两遍才对」显示成高分
-    if (!run.seen[q.id]) { run.asked++; if (right) run.first++; }
+    if (!run.seen[q.id]) {
+      run.asked++; if (right) run.first++;
+      if (q.k === "prod") { run.prodN++; if (right) run.prodOk++; }
+    }
+
+    srsUpdate(q.id, right, q.k === "prod" ? run.picked : null);
 
     var fb = $("#fb"), msg = $("#fbmsg");
     if (right) {
       run.ok++;
       fb.className = "fb ok";
-      msg.innerHTML = '<span class="ic">✅</span><div><b>答对了</b>' +
+      msg.innerHTML = '<span class="ic">✅</span><div><b>' +
+        (q.k === "prod" ? "说出来了才算会" : "答对了") + "</b>" +
         (q.w ? '<div class="why">' + q.w + "</div>" : "") + "</div>";
       // 复习模式答对才移出错题本（按 id 比较，跨会话也有效）
       if (run.rev) S.wrong = S.wrong.filter(function (w) { return w.id !== q.id; });
     } else {
-      run.hp--;
+      // 产出题是自评，不扣心——诚实自评的人不该被惩罚
+      if (q.k !== "prod") run.hp--;
       fb.className = "fb err";
-      msg.innerHTML = '<span class="ic">❌</span><div><b>再看一眼</b>' +
+      msg.innerHTML = '<span class="ic">' + (q.k === "prod" ? "📝" : "❌") + "</span><div><b>" +
+        (q.k === "prod"
+          ? (run.picked === 1 ? "说出一半 —— 这题记进错题本了" : "说不出来 —— 这才是你真正的边界")
+          : "再看一眼") + "</b>" +
         (q.w ? '<div class="why">' + q.w + "</div>" : "") + "</div>";
       if (q.id && !S.wrong.some(function (w) { return w.id === q.id; }))
         S.wrong.push({ id: q.id, t: Date.now() });
@@ -313,7 +441,11 @@ $("#act").addEventListener("click", function () {
 });
 
 function finish(cleared) {
-  var xp = cleared ? (10 + run.ok * 2) : run.ok * 2;
+  // XP 按提取难度给：产出题额外 4 分。
+  // 已完成的课重做不再计 XP——否则重刷一节已知答案的旧课就能稳定刷分和续连续天数，
+  // 那样 XP 测量的是「有没有打开 App」，不是「有没有学到」。
+  var redone = !run.rev && !!S.done[run.lid];
+  var xp = redone ? 0 : (cleared ? (10 + run.ok * 2 + run.prodOk * 4) : run.ok * 2);
   S.xp += xp;
   if (cleared && !run.rev) { S.done[run.lid] = 1; bumpStreak(); }
   if (cleared && run.rev) bumpStreak();
@@ -332,10 +464,17 @@ function finish(cleared) {
       ? (redo ? "有 " + redo + " 道是回炉之后才对的，它们已经进了错题本"
               : "全部一次答对，干净利落")
       : "错过的题都在错题本里，随时可以重来——不用等明天") + "</p>" +
-    '<div class="rewards"><div class="rw"><b>获得经验</b><span>+' + xp + "</span></div>" +
-    '<div class="rw g"><b>首答正确率</b><span>' + fr + "%</span></div></div>" +
-    (redo ? '<p class="hint">首答正确率只算第一次的答案。' +
-            '<b>回炉做对不等于会</b>——那道题真正的考验是三天以后。</p>' : "") +
+    '<div class="rewards"><div class="rw"><b>获得经验</b><span>+' + xp +
+      (redone ? '<i class="tiny">重做不计分</i>' : "") + "</span></div>" +
+    '<div class="rw g"><b>首答正确率</b><span>' + fr + "%</span></div>" +
+    (run.prodN ? '<div class="rw p"><b>产出率</b><span>' +
+      Math.round(run.prodOk / run.prodN * 100) + "%</span></div>" : "") + "</div>" +
+    (run.prodN
+      ? '<p class="hint"><b>产出率才是熟手度。</b>选择题答对只说明你认得出，' +
+        '产出题答对才说明你张得开嘴——老板问「这条船的红线日租是多少」时，' +
+        '你不能说「给我四个选项」。</p>'
+      : (redo ? '<p class="hint">首答正确率只算第一次的答案。' +
+                '<b>回炉做对不等于会</b>——那道题真正的考验是三天以后。</p>' : "")) +
     "</div>";
   var a = $("#act"); a.className = "btn on"; a.textContent = "回到路径"; a.disabled = false;
   a.onclick = function () { a.onclick = null; quit(); };
@@ -350,12 +489,24 @@ document.addEventListener("click", function (e) {
 /* ── 错题本 ────────────────────────────────────────────── */
 function paintReview() {
   var box = $("#reviewBox");
-  if (!S.wrong.length) {
-    box.innerHTML = '<div class="empty"><div class="big">🌱</div>还没有错题<br><span class="tiny">做几节课再回来看看</span></div>';
+  // 复习池 = 错题 + 到期该重做的题。后者是间隔重复排出来的，
+  // 「答对过」不等于「还记得」——所以已经做对的题也会按间隔回来考你。
+  var wrongIds = {};
+  S.wrong.forEach(function (w) { var q = byId(w); if (q) wrongIds[q.id] = 1; });
+  var due = dueIds().filter(function (id) { return !wrongIds[id]; });
+  var nWrong = Math.min(8, Object.keys(wrongIds).length);
+  var nDue = Math.min(12 - nWrong, due.length);
+
+  if (!S.wrong.length && !due.length) {
+    box.innerHTML = '<div class="empty"><div class="big">🌱</div>错题清空了，也没有到期要复习的<br>' +
+      '<span class="tiny">做过的题会按 1 / 3 / 5 / 8 天的间隔自动回来考你</span></div>';
     return;
   }
-  box.innerHTML = '<button class="btn on" id="revGo" style="margin-bottom:16px">开始复习 ' +
-    Math.min(8, S.wrong.length) + " 道</button>" +
+  box.innerHTML = '<button class="btn on" id="revGo" style="margin-bottom:10px">开始复习 ' +
+    (nWrong + nDue) + " 道</button>" +
+    '<div class="revmeta">错题 <b>' + Object.keys(wrongIds).length + "</b> 道" +
+    (due.length ? '　·　今天到期 <b>' + due.length + "</b> 道" : "") +
+    (nDue ? "" : (due.length ? "" : "　·　暂无到期")) + "</div>" +
     S.wrong.slice(0, 30).map(function (w) {
       var q = byId(w);
       if (!q) return "";

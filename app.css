@@ -158,6 +158,32 @@ button{ font:inherit; color:inherit; border:0; background:none; cursor:pointer; 
 .done p.hint{ margin:16px 0 0; padding:11px 13px; background:var(--sunk);
   border-left:3px solid var(--gold); border-radius:8px;
   font-size:12.5px; line-height:1.6; text-align:left; }
+.rw i.tiny{ display:block; font-size:10px; font-style:normal; opacity:.6; font-weight:400; }
+.rw.p span{ color:var(--purple); }
+
+/* ── 产出题 ──────────────────────────────────────────── */
+.qtype.prod{ color:var(--purple); }
+textarea.pin{ width:100%; box-sizing:border-box; margin-top:14px; padding:12px 13px;
+  border:2px solid var(--line2); border-radius:12px; background:var(--card);
+  color:var(--ink); font:inherit; font-size:15px; line-height:1.6; resize:vertical;
+  -webkit-appearance:none; }
+textarea.pin:focus{ outline:none; border-color:var(--purple); }
+textarea.pin:disabled{ opacity:.72; background:var(--sunk); }
+textarea.pin::placeholder{ color:var(--ink3); font-size:13.5px; }
+.model{ margin-top:18px; padding:14px; background:var(--sunk);
+  border:1px solid var(--line); border-radius:12px; }
+.model .mh{ font-size:11.5px; font-weight:700; letter-spacing:.06em;
+  color:var(--purple); margin-bottom:10px; }
+.model .mp{ display:flex; gap:9px; align-items:flex-start; padding:7px 0;
+  font-size:14px; line-height:1.62; border-top:1px solid var(--line); }
+.model .mp:first-of-type{ border-top:0; }
+.model .mp>b{ flex:none; width:19px; height:19px; margin-top:2px; border-radius:50%;
+  background:var(--purple); color:#fff; font-size:11px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; }
+.selfgrade .opt{ font-size:14.5px; }
+.selfgrade .opt.sel{ border-color:var(--purple); background:rgba(138,79,189,.10); }
+.revmeta{ margin-bottom:16px; font-size:12.5px; color:var(--ink2); text-align:center; }
+.revmeta b{ color:var(--ink); }
 .rewards{ display:flex; gap:12px; justify-content:center; margin-bottom:28px; }
 .rw{ flex:1; max-width:150px; border:2px solid var(--gold); border-radius:16px; overflow:hidden; }
 .rw b{ display:block; background:var(--gold); color:#fff; font-size:11.5px; padding:4px; letter-spacing:.08em; }
