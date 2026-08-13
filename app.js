@@ -518,30 +518,56 @@ function paintReview() {
 }
 
 /* ── 术语 ──────────────────────────────────────────────── */
-function paintTerms(kw) {
-  kw = (kw || "").trim().toLowerCase();
-  var list = TERMS;
+var termKw = "", termCat = "", termLimit = 60;
+function termGroup(t) { return (t.c || "其他").split("·")[0]; }
+function initTermCategories() {
+  var counts = {};
+  TERMS.forEach(function (t) { var c = termGroup(t); counts[c] = (counts[c] || 0) + 1; });
+  $("#tCategory").innerHTML = '<option value="">全部类别（' + TERMS.length + ")</option>" +
+    Object.keys(counts).sort().map(function (c) {
+      return '<option value="' + esc(c) + '">' + esc(c) + "（" + counts[c] + "）</option>";
+    }).join("");
+}
+function paintTerms(kw, reset) {
+  if (typeof kw === "string") termKw = kw;
+  if (reset) termLimit = 60;
+  kw = termKw.trim().toLowerCase();
+  var list = TERMS.filter(function (t) { return !termCat || termGroup(t) === termCat; });
   if (kw) {
-    list = TERMS.map(function (t) {
+    list = list.map(function (t) {
       var s = 0, lt = t.t.toLowerCase();
       if (lt === kw) s += 400; else if (lt.indexOf(kw) === 0) s += 220; else if (lt.indexOf(kw) >= 0) s += 130;
       if (t.cn && t.cn.toLowerCase().indexOf(kw) >= 0) s += 90;
       if (t.en && t.en.toLowerCase().indexOf(kw) >= 0) s += 70;
+      if (t.a && t.a.join(" ").toLowerCase().indexOf(kw) >= 0) s += 110;
       if (t.d && t.d.toLowerCase().indexOf(kw) >= 0) s += 22;
       if (t.n && t.n.toLowerCase().indexOf(kw) >= 0) s += 12;
       return { t: t, s: s };
     }).filter(function (o) { return o.s > 0; }).sort(function (a, b) { return b.s - a.s; })
       .map(function (o) { return o.t; });
   }
-  $("#termBox").innerHTML = list.slice(0, 60).map(function (t) {
-    return '<div class="tcard"><div class="t">' + esc(t.t) +
+  var shown = Math.min(termLimit, list.length);
+  $("#tShown").textContent = "显示 " + shown + " / " + list.length;
+  $("#termBox").innerHTML = list.slice(0, shown).map(function (t) {
+    return '<div class="tcard"><div class="trow"><div class="t">' + esc(t.t) +
       (t.cn ? "<span>" + esc(t.cn) + "</span>" : "") + "</div>" +
+      '<span class="tcat">' + esc(termGroup(t)) + "</span></div>" +
       (t.en ? '<div class="en">' + esc(t.en) + "</div>" : "") +
       (t.d ? '<div class="d">' + t.d + "</div>" : "") +
+      (t.u ? '<div class="u"><b>怎么用</b> ' + t.u + "</div>" : "") +
       (t.n ? '<div class="n">⚑ ' + t.n + "</div>" : "") + "</div>";
   }).join("") || '<div class="empty"><div class="big">🔍</div>没找到<br><span class="tiny">试试英文缩写，或换成中文</span></div>';
+  $("#termMore").innerHTML = shown < list.length ?
+    '<button class="morebtn" id="tMore">继续显示（还有 ' + (list.length - shown) + " 条）</button>" : "";
 }
-$("#tSearch").addEventListener("input", function () { paintTerms(this.value); });
+$("#tSearch").addEventListener("input", function () { paintTerms(this.value, true); });
+$("#tCategory").addEventListener("change", function () {
+  termCat = this.value; paintTerms(termKw, true);
+});
+$("#termMore").addEventListener("click", function (e) {
+  if (!e.target.closest("#tMore")) return;
+  termLimit += 60; paintTerms();
+});
 
 /* ── 导航 ──────────────────────────────────────────────── */
 $("#nav").addEventListener("click", function (e) {
@@ -562,7 +588,8 @@ $("#reset").addEventListener("click", function () {
 
 /* ── 启动 ──────────────────────────────────────────────── */
 $("#tCount").textContent = TERMS.length;
-paintTop(); paintPath(); paintReview(); paintTerms("");
+initTermCategories();
+paintTop(); paintPath(); paintReview(); paintTerms("", true);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {

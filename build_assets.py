@@ -2,6 +2,7 @@
 """生成 terms.js / manifest / sw.js / 图标 / vercel.json。"""
 import io, json, os
 from PIL import Image, ImageDraw
+from terms_v21 import apply_terms_v21
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # 术语库：优先用仓库内的副本，找不到再回退到白皮书项目目录
@@ -10,7 +11,7 @@ CAND = [os.path.join(HERE, "terms_v2.json"),
 SCR = next((p for p in CAND if os.path.exists(p)), None)
 if not SCR:
     raise SystemExit("找不到 terms_v2.json，请把它放在本目录下")
-T = json.load(io.open(SCR, encoding="utf-8"))
+T = apply_terms_v21(json.load(io.open(SCR, encoding="utf-8")))
 
 # ── terms.js：只保留 App 用得到的字段 ────────────────────────
 # 内容为全量（含公司船队与项目信息）——经内容所有者确认后放行。
@@ -27,7 +28,7 @@ for t in T:
                 if d[k]: d[k] += "。"
                 else: d.pop(k, None)
     o = {"t": d["t"], "c": d["c"]}
-    for k in ("en", "cn", "d", "n", "u"):
+    for k in ("en", "cn", "d", "n", "u", "a"):
         if d.get(k): o[k] = d[k]
     slim.append(o)
 io.open(os.path.join(HERE, "terms.js"), "w", encoding="utf-8").write(

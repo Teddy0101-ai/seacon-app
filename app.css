@@ -203,12 +203,25 @@ textarea.pin::placeholder{ color:var(--ink3); font-size:13.5px; }
 .search{ width:100%; padding:14px 16px; border-radius:15px; border:2px solid var(--line2);
          background:var(--sunk); color:var(--ink); font-size:16px; margin:12px 0; }
 .search:focus{ outline:none; border-color:var(--sky); }
+.termtools{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 10px; }
+.termtools select{ min-width:0; max-width:72%; padding:9px 30px 9px 11px; border:1px solid var(--line2);
+  border-radius:11px; background:var(--card); color:var(--ink); font:inherit; font-size:13px; }
+.termtools span{ flex:none; color:var(--ink3); font-size:12px; }
 .tcard{ background:var(--card); border:2px solid var(--line); border-radius:16px; padding:13px 15px; margin:9px 0; }
+.tcard .trow{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
 .tcard .t{ font-weight:800; font-size:15.5px; }
 .tcard .t span{ font-weight:600; font-size:13px; color:var(--ink3); margin-left:7px; }
+.tcard .tcat{ flex:none; max-width:92px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  padding:3px 7px; border-radius:999px; background:var(--sunk); color:var(--ink3); font-size:10.5px; }
 .tcard .en{ font-size:12px; color:var(--brand); margin-top:2px; }
 .tcard .d{ font-size:13.5px; color:var(--ink2); margin-top:6px; line-height:1.6; }
+.tcard .d code,.tcard .u code,.tcard .n code{ padding:1px 4px; border-radius:4px; background:var(--sunk); font-size:.92em; }
+.tcard .u{ font-size:12.5px; color:var(--ink2); margin-top:7px; padding:8px 9px; background:var(--sunk);
+  border-radius:9px; line-height:1.55; }
+.tcard .u b{ color:var(--brand); }
 .tcard .n{ font-size:12.5px; color:var(--bad); margin-top:7px; padding-top:7px; border-top:1px dashed var(--line); line-height:1.55; }
+.morebtn{ display:block; width:100%; margin:13px 0 2px; padding:13px; border:2px solid var(--line2);
+  border-radius:14px; background:var(--card); color:var(--brand); font-size:14px; font-weight:750; }
 
 /* ── 底部导航 ─────────────────────────────────────────── */
 .nav{
