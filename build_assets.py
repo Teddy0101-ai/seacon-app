@@ -36,7 +36,7 @@ io.open(os.path.join(HERE, "terms.js"), "w", encoding="utf-8").write(
 # ── manifest ────────────────────────────────────────────────
 manifest = {
     "name": "航运特训 · Seacon", "short_name": "航运特训",
-    "description": "航运投资知识特训——分模块闯关，快速掌握船型、租约、保险、周期与测算。",
+    "description": "《主流船型必须搞懂的知识白皮书》v2.1 闯关训练版，56 节、231 题。",
     "start_url": ".", "scope": ".", "display": "standalone",
     "orientation": "portrait", "background_color": "#ffffff", "theme_color": "#0b5c8a",
     "lang": "zh-CN", "categories": ["education", "productivity"],
