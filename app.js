@@ -43,6 +43,7 @@ var QMAP = {};
 C.forEach(function (u) {
   u.L.forEach(function (l) { l.q.forEach(function (q) { if (q.id) QMAP[q.id] = q; }); });
 });
+var TOTAL_Q = Object.keys(QMAP).length;
 function byId(w) { return QMAP[typeof w === "string" ? w : (w && (w.id || (w.q && w.q.id)))]; }
 // 旧版本存的是对象，这里把遗留数据迁成 id，顺便去重
 (function migrateWrong() {
@@ -54,6 +55,12 @@ function byId(w) { return QMAP[typeof w === "string" ? w : (w && (w.id || (w.q &
   });
   if (out.length !== (S.wrong || []).length) { S.wrong = out; save(); } else { S.wrong = out; }
 })();
+
+// 题库清空版本：旧设备里残留的完成记录、错题和间隔复习记录全部失效。
+// 只清学习数据，保留 XP / 连续学习等用户历史。
+if (!TOTAL_Q && (Object.keys(S.done || {}).length || S.wrong.length || Object.keys(S.srs || {}).length)) {
+  S.done = {}; S.wrong = []; S.srs = {}; save();
+}
 
 function paintTop() {
   $("#sStreak").textContent = S.streak;
@@ -69,7 +76,7 @@ function paintTop() {
 function paintPath() {
   var firstOpen = null;
   var h = C.map(function (u, ui) {
-    var dn = u.L.filter(function (_, i) { return S.done[u.id + "-" + i]; }).length;
+    var dn = TOTAL_Q ? u.L.filter(function (_, i) { return S.done[u.id + "-" + i]; }).length : 0;
     // 单元级解锁：上一单元做完 70% 才开这一单元。
     // 原来只判 i === 0，而那个条件对每个单元都成立——11 个单元的第一节全部一开始就开着，
     // 等于 11 条并行赛道，精心排的难度曲线被这一行取消了。
@@ -77,18 +84,20 @@ function paintPath() {
     var prevOK = !pu || pu.L.filter(function (_, k) { return S.done[pu.id + "-" + k]; }).length
                         >= Math.ceil(pu.L.length * 0.7);
     var nodes = u.L.map(function (l, i) {
-      var id = u.id + "-" + i, done = !!S.done[id];
+      var id = u.id + "-" + i, hasQuestions = l.q.length > 0;
+      var done = hasQuestions && !!S.done[id];
       // 顺序解锁：本单元前一节做完才开下一节
-      var open = done || (prevOK && (i === 0 || !!S.done[u.id + "-" + (i - 1)]));
+      var open = hasQuestions && (done || (prevOK && (i === 0 || !!S.done[u.id + "-" + (i - 1)])));
       if (open && !done && !firstOpen) firstOpen = id;
-      var cls = done ? "done" : (open ? (firstOpen === id ? "now" : "") : "lock");
-      var ic = done ? "★" : (open ? "▶" : "🔒");
+      var cls = !hasQuestions ? "empty-course" : (done ? "done" : (open ? (firstOpen === id ? "now" : "") : "lock"));
+      var ic = !hasQuestions ? "—" : (done ? "★" : (open ? "▶" : "🔒"));
       // 平移只能加在 btnwrap（小元素）上——加在 .node 上会把整行宽的容器一起推出屏幕
       var off = [0, 40, 56, 40, 0, -40, -56, -40][i % 8];
       return '<div class="node">' +
         '<div class="btnwrap" style="transform:translateX(' + off + 'px)">' +
         (firstOpen === id && !done ? '<div class="now-tag">从这里开始</div>' : "") +
-        '<button class="nd ' + cls + '" data-l="' + id + '" ' + (open ? "" : "disabled") + '>' + ic + "</button>" +
+        '<button class="nd ' + cls + '" data-l="' + id + '" ' + (open ? "" : "disabled") +
+        (!hasQuestions ? ' title="题目已清空，等待重做"' : "") + ">" + ic + "</button>" +
         '<div class="ndlabel">' + esc(l.t) + "</div></div></div>";
     }).join("");
     return '<div class="uhead" style="background:' + u.c + '">' +
@@ -96,10 +105,11 @@ function paintPath() {
       '<span class="pg">' + dn + "/" + u.L.length + "</span></div>" +
       '<div class="path">' + nodes + "</div>";
   }).join("");
-  $("#pathBox").innerHTML = h +
+  var notice = TOTAL_Q ? "" : '<div class="course-empty-banner"><b>题库已清空</b>' +
+    '<span>旧题已从源码和线上版本全部删除。11 个单元、56 节路径骨架暂时保留，等待重新设计。</span></div>';
+  $("#pathBox").innerHTML = notice + h +
     '<div class="tiny" style="text-align:center;padding:26px 0 10px">全部 ' + allLessons.length +
-    " 节 · " + C.reduce(function (a, u) { return a + u.L.reduce(function (b, l) { return b + l.q.length; }, 0); }, 0) +
-    " 道题<br>每节 3—6 题，一次 2 分钟</div>";
+    " 节路径 · " + TOTAL_Q + " 道题<br>题库重做完成前，课程节点不可进入</div>";
 }
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"]/g, function (m) {
@@ -130,6 +140,7 @@ function start(lid, fromReview) {
     if (!u) return;
     qs = u.L[+p[1]].q.slice();   // 复制一份：答错要往里插回炉题，不能改到原题库
   }
+  if (!qs || !qs.length) return;
   // 心数每节课重置，不跨天累计
   run = { lid: lid, rev: !!fromReview, qs: qs, i: 0, ok: 0, first: 0, asked: 0,
           prodN: 0, prodOk: 0,
@@ -498,8 +509,11 @@ function paintReview() {
   var nDue = Math.min(12 - nWrong, due.length);
 
   if (!S.wrong.length && !due.length) {
-    box.innerHTML = '<div class="empty"><div class="big">🌱</div>错题清空了，也没有到期要复习的<br>' +
-      '<span class="tiny">做过的题会按 1 / 3 / 5 / 8 天的间隔自动回来考你</span></div>';
+    box.innerHTML = TOTAL_Q
+      ? '<div class="empty"><div class="big">🌱</div>错题清空了，也没有到期要复习的<br>' +
+        '<span class="tiny">做过的题会按间隔自动回来考你</span></div>'
+      : '<div class="empty"><div class="big">🧹</div>题库已清空<br>' +
+        '<span class="tiny">旧错题和复习记录已经失效，等待新题库上线</span></div>';
     return;
   }
   box.innerHTML = '<button class="btn on" id="revGo" style="margin-bottom:10px">开始复习 ' +
