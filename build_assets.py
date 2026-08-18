@@ -36,10 +36,10 @@ io.open(os.path.join(HERE, "terms.js"), "w", encoding="utf-8").write(
 
 # ── manifest ────────────────────────────────────────────────
 manifest = {
-    "name": "航运特训 · Seacon", "short_name": "航运特训",
-    "description": "《主流船型必须搞懂的知识白皮书》v2.1 学习路径与术语库；题库正在重新设计。",
+    "name": "Seacon 航运学院", "short_name": "Seacon 学院",
+    "description": "基于白皮书 v2.1 重构的 16 单元、80 节、448 题航运学习系统与 392 条术语知识库。",
     "start_url": ".", "scope": ".", "display": "standalone",
-    "orientation": "portrait", "background_color": "#ffffff", "theme_color": "#0b5c8a",
+    "orientation": "any", "background_color": "#f6f7f1", "theme_color": "#0e4654",
     "lang": "zh-CN", "categories": ["education", "productivity"],
     "icons": [
         {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
@@ -60,8 +60,8 @@ for _f in ("index.html", "app.css", "app.js", "data.js", "terms.js"):
         _h.update(io.open(_p, "rb").read())
 VER = _h.hexdigest()[:10]
 
-SW = """// 航运特训 · 离线缓存（版本号由构建脚本按内容哈希生成，改代码自动失效旧缓存）
-const V = 'seacon-drill-%s';""" % VER + """
+SW = """// Seacon 航运学院 · 离线缓存（内容哈希变化时自动失效旧缓存）
+const V = 'seacon-academy-%s';""" % VER + """
 const FILES = ['./','./index.html','./app.css','./app.js','./data.js','./terms.js',
                './manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png',
                './icons/apple-touch-icon.png'];

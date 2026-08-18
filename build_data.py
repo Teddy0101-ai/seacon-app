@@ -1,56 +1,121 @@
 # -*- coding: utf-8 -*-
-"""生成已清空题目的课程路径骨架。
-
-旧题库已于 2026-08-14 全部删除。这里仅保留 11 个单元、56 节课的标题和顺序，
-方便后续从零重建内容，不允许旧题通过构建脚本重新混回来。
-"""
+"""编译并审计 Seacon Academy v3 课程数据。"""
 
 import io
+import hashlib
 import json
 import os
+from collections import Counter
 
+from course_v3_01 import UNITS as U01
+from course_v3_02 import UNITS as U02
+from course_v3_03 import UNITS as U03
+from course_v3_04 import UNITS as U04
+from course_v3_05 import UNITS as U05
+from course_v3_06 import UNITS as U06
+from course_v3_07 import UNITS as U07
+from course_v3_08 import UNITS as U08
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+COURSE = U01 + U02 + U03 + U04 + U05 + U06 + U07 + U08
+META = {
+    "version": "3.0.0", "title": "Seacon 航运学院",
+    "basis": "《主流船型必须搞懂的知识白皮书》v2.1",
+    "authorship": "LLM 逐题综合白皮书知识点、真实误区与实务场景后编写；构建期静态打包，离线不调用外部 API。",
+    "unitCount": 16, "lessonCount": 80, "questionCount": 448,
+}
 
 
-def lessons(*titles):
-    return [{"t": title, "q": []} for title in titles]
+def fail(message):
+    raise ValueError(message)
 
 
-COURSE = [
-    {"id": "u1", "t": "先认人", "s": "角色 · 钱怎么流", "c": "#2a9d8f", "i": "👥", "L": lessons(
-        "三个基本角色", "谁在管这条船", "钱从哪来到哪去", "五把不通用的尺子", "一条船的一生")},
-    {"id": "u2", "t": "八大船型", "s": "分清赛道", "c": "#2a78d6", "i": "🚢", "L": lessons(
-        "八个族", "名字的由来", "油轮那条线", "干散货与集装箱尺度", "剖开船体看结构", "OSV 按能力分级")},
-    {"id": "u3", "t": "参数与吨位", "s": "数字就是钱", "c": "#eb6834", "i": "📐", "L": lessons(
-        "六个「吨」", "三面红旗", "十一项参数都挂着钱")},
-    {"id": "u4", "t": "租约三分法", "s": "谁付油钱", "c": "#8a4fbd", "i": "📋", "L": lessons(
-        "TC / VC / BBC", "停租那些事", "航次租的黑话", "一年到底赚多少", "把 Recap 里的雷找出来")},
-    {"id": "u5", "t": "交易与文件", "s": "同一天发生", "c": "#c9722f", "i": "📄", "L": lessons(
-        "两种结构", "交船那一天", "谈判桌上", "二手船六步", "尽调不是收文件", "红线与交割日")},
-    {"id": "u6", "t": "保险九宫格", "s": "谁赔、赔多少", "c": "#c0392b", "i": "🛟", "L": lessons(
-        "九张保单", "为什么必须有 IOI", "环保合规", "九宫格的另外五格", "风险审批与环保分层", "制裁会让项目归零")},
-    {"id": "u7", "t": "市场与周期", "s": "什么时候出手", "c": "#1baf7a", "i": "📈", "L": lessons(
-        "需求是个乘法", "剪刀差", "周期时钟", "看哪个指数", "有效供给不是船队总数", "指数与研究纪律")},
-    {"id": "u8", "t": "测算与融资", "s": "算得清", "c": "#4a3aa7", "i": "🧮", "L": lessons(
-        "四个指标", "DSCR 是开关", "融资那些坑", "先过四道门", "银行控制的是现金流")},
-    {"id": "u9", "t": "数量级直觉", "s": "这个数正常吗", "c": "#e67e22", "i": "🎯", "L": lessons(
-        "船价与租金", "融资那几个比率", "市场与周期的标尺")},
-    {"id": "u10", "t": "实战情景", "s": "换你会怎么做", "c": "#c0392b", "i": "🧭", "L": lessons(
-        "交船日出事了", "租家来提索赔", "融资顾问的漂亮方案", "流程排序", "项目初筛先问什么", "看征兆，省谈判子弹")},
-    {"id": "u11", "t": "说得出来", "s": "白纸默写 · 不给选项", "c": "#8a4fbd", "i": "🗣", "L": lessons(
-        "角色与租约", "保险与交船文件", "算给我看 · 三条线", "算给我看 · 船与货", "说清机制")},
-]
+def validate():
+    if len(COURSE) != META["unitCount"]:
+        fail("单元数错误: %s" % len(COURSE))
+    if len({u["id"] for u in COURSE}) != len(COURSE):
+        fail("单元 ID 重复")
+    ids, stems, kinds, positions, tf_answers = set(), set(), Counter(), Counter(), Counter()
+    total_lessons = total_questions = 0
+    for unit in COURSE:
+        if len(unit["L"]) != 5:
+            fail("%s 不是 5 节" % unit["id"])
+        if not unit.get("guide") or len(unit.get("outcomes", [])) < 3:
+            fail("%s 缺少导读或成果" % unit["id"])
+        total_lessons += len(unit["L"])
+        for li, lesson_obj in enumerate(unit["L"], 1):
+            expected = 8 if lesson_obj.get("kind") == "checkpoint" else 5
+            if len(lesson_obj["q"]) != expected:
+                fail("%s 第 %s 节题量 %s != %s" % (unit["id"], li, len(lesson_obj["q"]), expected))
+            for key in ("goal", "intro", "keys", "trap", "source"):
+                if not lesson_obj.get(key):
+                    fail("%s 第 %s 节缺少 %s" % (unit["id"], li, key))
+            for qi, question in enumerate(lesson_obj["q"], 1):
+                qid = "%s-l%02d-q%02d" % (unit["id"], li, qi)
+                if qid in ids:
+                    fail("重复题目 ID: %s" % qid)
+                ids.add(qid)
+                question["id"] = qid
+                question["source"] = question.get("source") or lesson_obj["source"]
+                if not question.get("q") or not question.get("w"):
+                    fail("%s 缺题干或解析" % qid)
+                normalized_stem = "".join(question["q"].split())
+                if normalized_stem in stems:
+                    fail("重复题干: %s" % question["q"])
+                stems.add(normalized_stem)
+                if len(question["w"]) < 10:
+                    fail("%s 解析过短，未解释判断机制" % qid)
+                kind = question.get("k")
+                kinds[kind] += 1
+                # 题目正文和干扰项由作者逐条撰写；这里仅按稳定 ID 轮换展示顺序，
+                # 避免作者源码习惯让正确答案长期出现在第一个位置。
+                if kind in ("mc", "num", "multi") and question.get("o"):
+                    opts0 = list(question["o"])
+                    shift = int(hashlib.sha256(qid.encode("ascii")).hexdigest()[:8], 16) % len(opts0)
+                    question["o"] = opts0[shift:] + opts0[:shift]
+                if kind in ("mc", "tf", "num"):
+                    opts = question.get("o", [])
+                    if len(opts) < 2 or len(opts) != len(set(opts)):
+                        fail("%s 选项不足或重复" % qid)
+                    if question.get("a") not in opts:
+                        fail("%s 答案不在选项中" % qid)
+                    if kind in ("mc", "num"):
+                        positions[opts.index(question["a"])] += 1
+                    if kind == "tf":
+                        tf_answers[question["a"]] += 1
+                elif kind == "multi":
+                    opts, answers = question.get("o", []), question.get("a", [])
+                    if len(opts) != len(set(opts)) or not answers or not set(answers).issubset(set(opts)):
+                        fail("%s 多选答案非法" % qid)
+                elif kind == "order":
+                    if len(question.get("o", [])) < 3 or question.get("o") != question.get("a"):
+                        fail("%s 排序结构非法" % qid)
+                elif kind == "prod":
+                    if not question.get("model"):
+                        fail("%s 缺参考表达" % qid)
+                else:
+                    fail("%s 未知题型 %s" % (qid, kind))
+                total_questions += 1
+    if total_lessons != META["lessonCount"] or total_questions != META["questionCount"]:
+        fail("规模错误: %s 节 / %s 题" % (total_lessons, total_questions))
+    required = {"mc", "tf", "multi", "order", "prod", "num"}
+    if not required.issubset(kinds):
+        fail("题型缺失: %s" % (required - set(kinds)))
+    if positions and max(positions.values()) / sum(positions.values()) > 0.48:
+        fail("单选答案位置偏置过强: %s" % dict(positions))
+    if tf_answers and max(tf_answers.values()) / sum(tf_answers.values()) > 0.75:
+        fail("判断题方向偏置过强: %s" % dict(tf_answers))
+    return total_lessons, total_questions, kinds, positions, tf_answers
 
 
-unit_count = len(COURSE)
-lesson_count = sum(len(unit["L"]) for unit in COURSE)
-question_count = sum(len(lesson["q"]) for unit in COURSE for lesson in unit["L"])
-assert unit_count == 11
-assert lesson_count == 56
-assert question_count == 0, "题库清空版本不得包含任何题目"
-
-js = "window.COURSE=" + json.dumps(COURSE, ensure_ascii=False, separators=(",", ":")) + ";"
-io.open(os.path.join(HERE, "data.js"), "w", encoding="utf-8").write(js)
-print("单元 %d 个 / 路径 %d 节 / 题目 %d 道 / data.js %.1f KB"
-      % (unit_count, lesson_count, question_count, len(js.encode("utf-8")) / 1024))
+lessons, questions, kinds, positions, tf_answers = validate()
+payload = "window.COURSE_META=" + json.dumps(META, ensure_ascii=False, separators=(",", ":")) + ";\n"
+payload += "window.COURSE=" + json.dumps(COURSE, ensure_ascii=False, separators=(",", ":")) + ";\n"
+with io.open(os.path.join(HERE, "data.js"), "w", encoding="utf-8") as handle:
+    handle.write(payload)
+print("PASS Seacon Academy v3")
+print("单元 %d / 课程 %d / 题目 %d / %.1f KB" %
+      (len(COURSE), lessons, questions, len(payload.encode("utf-8")) / 1024.0))
+print("题型 " + json.dumps(kinds, ensure_ascii=False, sort_keys=True))
+print("答案位置 " + json.dumps(positions, ensure_ascii=False, sort_keys=True))
+print("判断方向 " + json.dumps(tf_answers, ensure_ascii=False, sort_keys=True))

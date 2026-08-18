@@ -1,613 +1,102 @@
-/* ═══════════════════════════════════════════════════════════
-   航运特训 · 逻辑层
-   状态全部落在 localStorage，纯前端，无后端、无网络请求
-   ═══════════════════════════════════════════════════════════ */
-(function () {
+(function(){
 "use strict";
-var $ = function (s) { return document.querySelector(s); };
-var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
-var C = window.COURSE || [], TERMS = window.TERMS || [];
-var KEY = "seacon-drill-v1";
 
-/* ── 状态 ──────────────────────────────────────────────── */
-var S = load();
-function load() {
-  var d = { xp: 0, streak: 0, last: "", done: {}, wrong: [], srs: {} };
-  try { var raw = localStorage.getItem(KEY); if (raw) d = Object.assign(d, JSON.parse(raw)); } catch (e) {}
-  return d;
+var COURSE=window.COURSE||[], META=window.COURSE_META||{}, TERMS=window.TERMS||[];
+var KEY="seacon-academy-v3", PAGE_SIZE=24, termLimit=PAGE_SIZE, termCategory="", termQuery="";
+var $=function(s,r){return (r||document).querySelector(s)};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
+var esc=function(v){return String(v==null?"":v).replace(/<[^>]*>/g,"").replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
+var clamp=function(n,a,b){return Math.max(a,Math.min(b,n))};
+var allLessons=[], qmap={}, lessonMap={};
+COURSE.forEach(function(u,ui){u.L.forEach(function(l,li){var id=u.id+"-l"+(li+1);var x={id:id,u:u,l:l,ui:ui,li:li};allLessons.push(x);lessonMap[id]=x;l.q.forEach(function(q){qmap[q.id]=q})})});
+
+function localDay(d){d=d||new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function addDays(day,n){var d=new Date(day+"T12:00:00");d.setDate(d.getDate()+n);return localDay(d)}
+function fresh(){return{v:3,xp:0,gems:0,streak:0,lastDay:"",done:{},mistakes:{},srs:{},activity:{},stats:{correct:0,total:0},questRewards:{}}}
+function load(){var s=fresh();try{var raw=localStorage.getItem(KEY);if(raw)s=Object.assign(s,JSON.parse(raw))}catch(e){};["done","mistakes","srs","activity","questRewards"].forEach(function(k){s[k]=s[k]||{}});s.stats=s.stats||{correct:0,total:0};return s}
+var S=load();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function activityToday(){return S.activity[localDay()]||{xp:0,lessons:0,reviews:0}}
+function touchActivity(kind,xp){var day=localDay(),a=S.activity[day]||(S.activity[day]={xp:0,lessons:0,reviews:0});a.xp+=xp||0;if(kind)a[kind]=(a[kind]||0)+1;if(S.lastDay!==day){var yesterday=addDays(day,-1);S.streak=S.lastDay===yesterday?S.streak+1:1;S.lastDay=day}save()}
+function lessonDone(id){return!!S.done[id]}
+function unitUnlocked(ui){return ui===0||lessonDone(COURSE[ui-1].id+"-l5")}
+function lessonUnlocked(x){return unitUnlocked(x.ui)&&(x.li===0||lessonDone(x.u.id+"-l"+x.li))}
+function nextLesson(){for(var i=0;i<allLessons.length;i++){if(lessonUnlocked(allLessons[i])&&!lessonDone(allLessons[i].id))return allLessons[i]}return allLessons[allLessons.length-1]||null}
+function unitMastery(u){var total=15,points=0;u.L.forEach(function(_,i){points+=((S.done[u.id+"-l"+(i+1)]||{}).stars||0)});return Math.round(points/total*100)}
+function completedCount(){return Object.keys(S.done).filter(function(k){return lessonMap[k]}).length}
+function activeMistakes(){return Object.keys(S.mistakes).filter(function(id){return qmap[id]&&!S.mistakes[id].resolved})}
+function dueQuestions(){var today=localDay();return Object.keys(S.srs).filter(function(id){return qmap[id]&&S.srs[id].due<=today})}
+function rankInfo(){var ranks=[{n:"见习水手",x:0,e:"⚓"},{n:"值班三副",x:300,e:"🧭"},{n:"航运分析员",x:900,e:"📊"},{n:"项目经理",x:1800,e:"🚢"},{n:"投资船长",x:3200,e:"🏆"}];var cur=ranks[0],next=ranks[1];for(var i=0;i<ranks.length;i++){if(S.xp>=ranks[i].x){cur=ranks[i];next=ranks[i+1]||null}}return{cur:cur,next:next}}
+function icon(name){return'<svg aria-hidden="true"><use href="#i-'+name+'"/></svg>'}
+
+function switchView(name,push){if(!$("#view-"+name))name="learn";$$('[data-page]').forEach(function(v){v.classList.toggle("is-active",v.dataset.page===name)});$$('[data-view]').forEach(function(b){b.classList.toggle("is-active",b.dataset.view===name)});if(push!==false)history.replaceState(null,"","#"+name);window.scrollTo({top:0,behavior:"smooth"});if(name==="review")renderReview();if(name==="library")renderTerms();if(name==="growth")renderGrowth()}
+document.addEventListener("click",function(e){var nav=e.target.closest("[data-view]");if(nav){switchView(nav.dataset.view);return}var link=e.target.closest("[data-view-link]");if(link){e.preventDefault();switchView(link.dataset.viewLink)}});
+
+function renderAll(){renderStats();renderLearn();renderReview();renderTerms();renderGrowth()}
+function renderStats(){var due=dueQuestions().length,rank=rankInfo(),today=activityToday();$$('[data-streak]').forEach(function(x){x.textContent=S.streak});$$('[data-xp]').forEach(function(x){x.textContent=S.xp.toLocaleString()});$$('[data-gems]').forEach(function(x){x.textContent=S.gems.toLocaleString()});$("#navDue").textContent=due;$("#mobileDue").textContent=due;$("#mobileDue").style.display=due?"grid":"none";$("#rankLabel").textContent=rank.cur.n;$("#railRank").textContent=rank.cur.n;$("#xpToday").textContent="今日 +"+(today.xp||0);var pct=rank.next?clamp((S.xp-rank.cur.x)/(rank.next.x-rank.cur.x)*100,0,100):100;$("#rankBar").style.width=pct+"%";$("#rankProgress").textContent=rank.next?(S.xp-rank.cur.x)+" / "+(rank.next.x-rank.cur.x)+" XP":"最高等级";$("#railRankCopy").textContent=rank.next?"再获得 "+(rank.next.x-S.xp)+" XP 晋升「"+rank.next.n+"」。":"你已完成全部等级航程。";var qdone=Math.min(today.lessons||0,1);$("#questPct").textContent=qdone?"100%":"0%";$("#questBar").style.width=qdone?"100%":"0%";$("#questState").textContent=qdone+" / 1 节";$("#questCopy").textContent=qdone?"今日课程已完成。明天回来继续保持节奏。":"完成 1 节课程，获得今日航程奖励。";$("#accuracyStat").textContent=S.stats.total?Math.round(S.stats.correct/S.stats.total*100)+"%":"—";$("#masteryStat").textContent=Math.round(completedCount()/Math.max(allLessons.length,1)*100)+"%";$("#doneLessonsStat").textContent=completedCount()+" 节完成"}
+
+function renderLearn(){var done=completedCount(),pct=Math.round(done/Math.max(allLessons.length,1)*100),next=nextLesson();$("#courseProgressText").textContent=done+" / "+allLessons.length+" 节完成";$("#courseProgressBar").style.width=pct+"%";$("#courseRing").style.setProperty("--p",pct);$("#courseRing b").textContent=pct+"%";$("#masteredCount").textContent=Object.keys(S.done).filter(function(id){return(S.done[id].stars||0)>=3}).length;$("#courseQuestionCount").textContent=META.questionCount||Object.keys(qmap).length;if(next){$("#continueLabel").textContent=lessonDone(next.id)?("重练「"+next.l.t+"」"):("继续「"+next.l.t+"」");$("#navNext").textContent=done===allLessons.length?"复习":"继续"}
+  $("#coursePath").innerHTML=COURSE.map(function(u,ui){var unlocked=unitUnlocked(ui);var mastery=unitMastery(u);var nodes=u.L.map(function(l,li){var id=u.id+"-l"+(li+1),x=lessonMap[id],doneObj=S.done[id],open=lessonUnlocked(x),current=next&&next.id===id&&!doneObj,stars=doneObj?doneObj.stars||1:0;var cls=["lesson-node",open?"is-open":"",doneObj?"is-done":"",current?"is-current":"",l.kind==="checkpoint"?"is-checkpoint":""].join(" ");var disc=doneObj?(l.kind==="checkpoint"?"🏆":"★"):(open?(l.kind==="checkpoint"?"🏁":["🧠","🔍","🧩","⚙️"][li%4]):icon("lock"));return'<button class="'+cls+'" data-lesson="'+id+'" '+(open?"":"disabled")+'><span class="node-disc">'+disc+'</span><span class="node-copy"><b>'+esc(l.t)+'</b><small>'+esc(l.goal)+'</small></span><span class="node-stars">'+[0,1,2].map(function(k){return'<i class="'+(k<stars?"":"off")+'">★</i>'}).join("")+'</span></button>'}).join("");return'<article class="unit-card '+(unlocked?"":"is-locked")+'" style="--unit:'+u.c+'"><header class="unit-banner"><span class="unit-index">'+(unlocked?esc(u.i):icon("lock"))+'</span><div class="unit-title"><small>Unit '+String(ui+1).padStart(2,"0")+' · '+mastery+'% 掌握</small><h2>'+esc(u.t)+'</h2><p>'+esc(u.s)+'</p></div><button class="guide-btn" data-guide="'+u.id+'">'+icon("book")+' 单元导读</button></header><div class="lesson-path">'+nodes+'</div></article>'}).join("")
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
-function today() { return new Date().toISOString().slice(0, 10); }
+$("#continueBtn").addEventListener("click",function(){var n=nextLesson();if(n)openLessonPreview(n.id)});
+$("#coursePath").addEventListener("click",function(e){var g=e.target.closest("[data-guide]");if(g){openGuide(g.dataset.guide);return}var l=e.target.closest("[data-lesson]");if(l)openLessonPreview(l.dataset.lesson)});
 
-// 心数改成「每节课 5 颗」，不再按天锁死。
-// 原来的做法有两个问题：① 每天最多只允许错 5 次，而错误恰恰是学习价值最高的事件；
-// ② 心数归零后 run.hp 一直是 0，即使全部答对也过不了任何一节课，App 到第二天才能用。
-// 现在错误的代价改成「当场回炉多做两遍」——这既不砖掉 App，又把重复放在了正确的位置。
-delete S.hearts; delete S.hDay;
+function openModal(id){var m=$(id);m.classList.add("is-open");m.setAttribute("aria-hidden","false");document.body.classList.add("modal-open")}
+function closeModals(){$$('.modal.is-open').forEach(function(m){m.classList.remove("is-open");m.setAttribute("aria-hidden","true")});document.body.classList.remove("modal-open")}
+document.addEventListener("click",function(e){if(e.target.closest("[data-close-modal]"))closeModals()});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"){if($("#runner").classList.contains("is-open"))askQuit();else closeModals()}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){e.preventDefault();switchView("library");setTimeout(function(){$("#termSearch").focus()},50)}});
+function openGuide(uid){var u=COURSE.find(function(x){return x.id===uid});if(!u)return;$("#guideContent").innerHTML='<div class="guide-top"><span class="guide-icon" style="background:'+u.c+'">'+esc(u.i)+'</span><div><span class="eyebrow">单元能力地图</span><h2 id="guideTitle">'+esc(u.t)+'</h2><p>'+esc(u.s)+'</p></div></div><p class="guide-copy">'+esc(u.guide)+'</p><div class="outcome-list">'+u.outcomes.map(function(x){return'<span><i>✓</i>'+esc(x)+'</span>'}).join("")+'</div><div class="guide-lessons"><h3>你会沿着这 5 步前进</h3><ol>'+u.L.map(function(l){return'<li><span><b>'+esc(l.t)+'</b><br>'+esc(l.goal)+'</span></li>'}).join("")+'</ol></div>';openModal("#guideModal")}
+function openLessonPreview(id){var x=lessonMap[id];if(!x||!lessonUnlocked(x))return;var l=x.l;$("#lessonPreview").innerHTML='<div class="preview-hero" style="--unit:'+x.u.c+'"><div class="preview-badges"><span>UNIT '+(x.ui+1)+'</span><span>'+(l.kind==="checkpoint"?"单元闯关":"核心课程")+'</span><span>'+l.q.length+' 道练习</span></div><div class="preview-top"><span class="eyebrow">学习目标</span><h2 id="lessonPreviewTitle">'+esc(l.t)+'</h2><p>'+esc(l.goal)+'</p></div></div><div class="preview-body"><p class="micro-lesson">'+esc(l.intro)+'</p><div class="key-list">'+l.keys.map(function(k){return'<span>'+esc(k)+'</span>'}).join("")+'</div><div class="trap-card"><b>⚠ 易错点</b><span>'+esc(l.trap)+'</span></div><div class="source-line">内容依据：'+esc(l.source)+' · 题目由 LLM 逐题综合编写，非模板拼接</div><button class="start-lesson" data-start="'+id+'">'+(lessonDone(id)?"重新练习":"开始学习")+' · 约 '+Math.max(3,Math.ceil(l.q.length*.75))+' 分钟</button></div>';openModal("#lessonModal")}
+$("#lessonPreview").addEventListener("click",function(e){var b=e.target.closest("[data-start]");if(b)startLesson(b.dataset.start)});
 
-function bumpStreak() {
-  var t = today();
-  if (S.last === t) return;
-  var y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-  S.streak = (S.last === y) ? S.streak + 1 : 1;
-  S.last = t;
-}
+function normalizedTerm(t){return[t.t,t.c,t.en,t.cn,t.d,t.n,t.u].concat(t.a||[]).filter(Boolean).join(" ").toLowerCase()}
+var catCounts={};TERMS.forEach(function(t){catCounts[t.c||"其他"]=(catCounts[t.c||"其他"]||0)+1});var topCats=Object.keys(catCounts).sort(function(a,b){return catCounts[b]-catCounts[a]}).slice(0,11);
+function renderTerms(){var filter=$("#termFilters");if(!filter.dataset.ready){filter.innerHTML=[''].concat(topCats).map(function(c){return'<button class="filter-chip '+(c===""?"is-active":"")+'" data-cat="'+esc(c)+'">'+(c||"全部")+(c?' · '+catCounts[c]:"")+'</button>'}).join("");filter.dataset.ready="1"}var list=TERMS.filter(function(t){var cat=!termCategory||(t.c||"其他")===termCategory;var text=!termQuery||normalizedTerm(t).indexOf(termQuery)>=0;return cat&&text});var shown=list.slice(0,termLimit);$("#termResultTitle").textContent=termQuery?'“'+termQuery+'” 的结果':(termCategory||"全部术语");$("#termResultCount").textContent=list.length+" 条";$("#termGrid").innerHTML=shown.map(function(t){var idx=TERMS.indexOf(t);return'<button class="term-card" data-term="'+idx+'"><span class="term-cat">'+esc(t.c||"其他")+'</span><h3>'+esc(t.t)+'</h3><span class="term-cn">'+esc(t.cn||t.en||"")+'</span><p>'+esc(t.d||t.u||t.n||"点击查看详细说明")+'</p></button>'}).join("")||'<div class="empty-state"><b>没有找到匹配术语</b><span>试试缩写、英文或更短的关键词。</span></div>';$("#termMore").hidden=shown.length>=list.length}
+$("#termSearch").addEventListener("input",function(){termQuery=this.value.trim().toLowerCase();termLimit=PAGE_SIZE;renderTerms()});
+$("#termFilters").addEventListener("click",function(e){var b=e.target.closest("[data-cat]");if(!b)return;termCategory=b.dataset.cat;termLimit=PAGE_SIZE;$$('[data-cat]',this).forEach(function(x){x.classList.toggle("is-active",x===b)});renderTerms()});
+$("#termMore").addEventListener("click",function(){termLimit+=PAGE_SIZE;renderTerms()});
+$("#termGrid").addEventListener("click",function(e){var b=e.target.closest("[data-term]");if(!b)return;var t=TERMS[+b.dataset.term];$("#termContent").innerHTML='<div class="term-detail"><span class="term-cat">'+esc(t.c||"其他")+'</span><h2>'+esc(t.t)+'</h2><div class="term-cn">'+esc(t.cn||t.en||"")+'</div><div class="term-block"><b>核心定义</b><p>'+esc(t.d||"暂无定义")+'</p></div>'+(t.n?'<div class="term-block"><b>实务提醒</b><p>'+esc(t.n)+'</p></div>':"")+(t.u?'<div class="term-block"><b>使用场景</b><p>'+esc(t.u)+'</p></div>':"")+(t.a&&t.a.length?'<div class="term-aliases">'+t.a.map(function(a){return'<span>'+esc(a)+'</span>'}).join("")+'</div>':"")+'</div>';openModal("#termModal")});
 
-var allLessons = [];
-C.forEach(function (u) { u.L.forEach(function (l, i) { allLessons.push(u.id + "-" + i); }); });
+function reviewPool(mode){var ids=[];if(mode==="due")ids=dueQuestions();else if(mode==="wrong")ids=activeMistakes();else if(mode==="weak"){COURSE.filter(function(u){return unitMastery(u)<65}).forEach(function(u){u.L.forEach(function(l){l.q.forEach(function(q){ids.push(q.id)})})})}else ids=dueQuestions().concat(activeMistakes());var seen={};ids=ids.filter(function(id){if(seen[id]||!qmap[id])return false;seen[id]=1;return true});if(!ids.length&&mode==="smart"){var completed=allLessons.filter(function(x){return lessonDone(x.id)});if(completed.length){completed.slice(-3).forEach(function(x){x.l.q.forEach(function(q){ids.push(q.id)})})}}return shuffle(ids).slice(0,12).map(function(id){return qmap[id]})}
+function renderReview(){var due=dueQuestions().length,wrong=activeMistakes().length,weak=COURSE.filter(function(u){return unitMastery(u)<60&&u.L.some(function(_,i){return lessonDone(u.id+"-l"+(i+1))})}).length;if(due){$("#reviewHeadline").textContent=due+" 道知识点到了最佳复习时间";$("#reviewSummary").textContent="优先完成到期题，再处理错题。系统会根据结果调整下次出现时间。"}else if(wrong){$("#reviewHeadline").textContent="还有 "+wrong+" 道错题值得回炉";$("#reviewSummary").textContent="不是重刷整节课，只练真正失分的判断。"}else{$("#reviewHeadline").textContent="今天没有到期题";$("#reviewSummary").textContent=completedCount()?"可以做一次混合巩固，或继续学习新课程。":"完成一节课程后，系统会自动生成间隔复习计划。"}$("#reviewGrid").innerHTML=[{m:"due",i:"⏱",n:due,t:"到期复习",p:"根据 1/3/7/14/30 天节奏安排"},{m:"wrong",i:"↺",n:wrong,t:"错题回炉",p:"只练尚未真正解决的错误"},{m:"weak",i:"◫",n:weak,t:"薄弱单元",p:"按单元掌握度寻找知识缺口"}].map(function(x){return'<button class="review-card" data-review="'+x.m+'"><span class="review-icon">'+x.i+'</span><strong>'+x.n+'</strong><b>'+x.t+'</b><p>'+x.p+'</p></button>'}).join("");var units=COURSE.map(function(u){return{u:u,p:unitMastery(u)}}).filter(function(x){return x.p<100}).sort(function(a,b){return a.p-b.p}).slice(0,6);$("#weakList").innerHTML=units.map(function(x){return'<div class="mastery-row"><span class="unit-dot" style="background:'+x.u.c+'">'+esc(x.u.i)+'</span><span><b>'+esc(x.u.t)+'</b><small>'+esc(x.u.s)+'</small></span><span class="mastery-bar"><i style="width:'+x.p+'%;background:'+x.u.c+'"></i></span><button data-guide="'+x.u.id+'">'+x.p+'% · 查看</button></div>'}).join("")||'<div class="empty-state"><b>所有已学单元都很稳</b><span>继续前进，新的能力图会在这里出现。</span></div>'}
+$("#smartReviewBtn").addEventListener("click",function(){startReview("smart")});
+$("#reviewGrid").addEventListener("click",function(e){var b=e.target.closest("[data-review]");if(b)startReview(b.dataset.review)});
+$("#weakList").addEventListener("click",function(e){var b=e.target.closest("[data-guide]");if(b)openGuide(b.dataset.guide)});
 
-// 题目 id → 题目对象。错题本只存 id，不存对象本身——
-// 对象经 localStorage 的 JSON 往返后会变成一个新副本，用 === 永远比不上原题，
-// 于是跨会话答错同一题会重复堆积、复习答对也移不出去。存 id 就没这个问题。
-var QMAP = {};
-C.forEach(function (u) {
-  u.L.forEach(function (l) { l.q.forEach(function (q) { if (q.id) QMAP[q.id] = q; }); });
-});
-var TOTAL_Q = Object.keys(QMAP).length;
-function byId(w) { return QMAP[typeof w === "string" ? w : (w && (w.id || (w.q && w.q.id)))]; }
-// 旧版本存的是对象，这里把遗留数据迁成 id，顺便去重
-(function migrateWrong() {
-  var seen = {}, out = [];
-  (S.wrong || []).forEach(function (w) {
-    var q = byId(w) || (w && w.q && QMAP[w.q.id]);
-    var id = q && q.id;
-    if (id && !seen[id]) { seen[id] = 1; out.push({ id: id, t: (w && w.t) || Date.now() }); }
-  });
-  if (out.length !== (S.wrong || []).length) { S.wrong = out; save(); } else { S.wrong = out; }
-})();
+var renderReviewBase=renderReview;
+renderReview=function(){renderReviewBase();var units=COURSE.map(function(u){return{u:u,p:unitMastery(u),started:u.L.some(function(_,i){return lessonDone(u.id+"-l"+(i+1))})}}).filter(function(x){return x.started&&x.p<100}).sort(function(a,b){return a.p-b.p}).slice(0,6);$("#weakList").innerHTML=units.map(function(x){return'<div class="mastery-row"><span class="unit-dot" style="background:'+x.u.c+'">'+esc(x.u.i)+'</span><span><b>'+esc(x.u.t)+'</b><small>'+esc(x.u.s)+'</small></span><span class="mastery-bar"><i style="width:'+x.p+'%;background:'+x.u.c+'"></i></span><button data-guide="'+x.u.id+'">'+x.p+'% · 查看</button></div>'}).join("")||'<div class="empty-state"><b>还没有形成薄弱单元</b><span>完成第一节课程后，这里会按掌握度给出诊断。</span></div>'};
 
-// 题库清空版本：旧设备里残留的完成记录、错题和间隔复习记录全部失效。
-// 只清学习数据，保留 XP / 连续学习等用户历史。
-if (!TOTAL_Q && (Object.keys(S.done || {}).length || S.wrong.length || Object.keys(S.srs || {}).length)) {
-  S.done = {}; S.wrong = []; S.srs = {}; save();
-}
+function renderGrowth(){var rank=rankInfo();$("#profileRank").textContent=rank.next?rank.cur.n+" · 距「"+rank.next.n+"」还差 "+(rank.next.x-S.xp)+" XP":rank.cur.n+" · 已抵达最高等级";var days=[],today=new Date();for(var i=83;i>=0;i--){var d=new Date(today);d.setDate(d.getDate()-i);var day=localDay(d),a=S.activity[day]||{},score=(a.xp||0)+(a.lessons||0)*30;days.push({day:day,score:score})}$("#activeDays").textContent=days.filter(function(x){return x.score>0}).length+" 个活跃日";$("#heatmap").innerHTML=days.map(function(x){var lv=x.score===0?0:x.score<30?1:x.score<70?2:x.score<130?3:4;return'<i class="lv'+lv+'" title="'+x.day+' · '+x.score+' 活跃值"></i>'}).join("");var at=activityToday();$("#dailyQuest").innerHTML=[{e:"📘",t:"完成一节课程",s:(at.lessons||0)+" / 1",ok:(at.lessons||0)>=1},{e:"🧠",t:"答对 10 道题",s:Math.min(at.correct||0,10)+" / 10",ok:(at.correct||0)>=10},{e:"↺",t:"完成一次复习",s:(at.reviews||0)+" / 1",ok:(at.reviews||0)>=1}].map(function(x){return'<div class="quest-item"><span>'+x.e+'</span><span><b>'+x.t+'</b><small>'+(x.ok?"今日已完成":"继续保持")+'</small></span><em>'+x.s+(x.ok?" ✓":"")+'</em></div>'}).join("");var badges=[{e:"🌊",t:"第一次离港",d:"完成第 1 节课",ok:completedCount()>=1},{e:"🧭",t:"方向感",d:"完成 4 个单元",ok:COURSE.filter(function(u){return lessonDone(u.id+"-l5")}).length>=4},{e:"🔥",t:"七日航线",d:"连续学习 7 天",ok:S.streak>=7},{e:"🔎",t:"错误猎手",d:"解决 20 道错题",ok:Object.keys(S.mistakes).filter(function(id){return S.mistakes[id].resolved}).length>=20},{e:"⭐",t:"满星船长",d:"10 节课程拿到 3 星",ok:Object.keys(S.done).filter(function(id){return(S.done[id].stars||0)>=3}).length>=10},{e:"📚",t:"半程航海",d:"完成 40 节课程",ok:completedCount()>=40},{e:"🏆",t:"白皮书通关",d:"完成全部 16 单元",ok:completedCount()>=80},{e:"💎",t:"判断大师",d:"首答正确率达到 90%",ok:S.stats.total>=50&&S.stats.correct/S.stats.total>=.9}];$("#badgeGrid").innerHTML=badges.map(function(b){return'<article class="badge-card '+(b.ok?"":"is-locked")+'"><span class="badge-medal">'+b.e+'</span><b>'+b.t+'</b><small>'+b.d+(b.ok?" · 已获得":"")+'</small></article>'}).join("");renderStats()}
+$("#exportProgress").addEventListener("click",function(){var blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(),meta:META,progress:S},null,2)],{type:"application/json"});var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="seacon-learning-progress-"+localDay()+".json";a.click();setTimeout(function(){URL.revokeObjectURL(a.href)},1000);toast("学习进度已导出")});
+$("#resetProgress").addEventListener("click",function(){if(confirm("确定清空本设备上的全部学习进度吗？此操作无法撤销。")){S=fresh();save();renderAll();toast("学习进度已清空")}});
 
-function paintTop() {
-  $("#sStreak").textContent = S.streak;
-  $("#sXp").textContent = S.xp;
-  $("#sHeart").textContent = S.wrong.length;
-  $("#mStreak").textContent = S.streak + " 天";
-  $("#mXp").textContent = S.xp + " XP";
-  $("#mDone").textContent = Object.keys(S.done).length + " / " + allLessons.length;
-  $("#mWrong").textContent = S.wrong.length + " 道";
-}
+var run=null;
+function shuffle(a){var x=a.slice();for(var i=x.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=x[i];x[i]=x[j];x[j]=t}return x}
+function startLesson(id){var x=lessonMap[id];if(!x)return;closeModals();run={mode:"lesson",lesson:x,queue:x.l.q.slice(),base:x.l.q.length,index:0,hp:5,first:{},repeated:{},correct:0,selected:null,checked:false,order:null,prodText:""};openRunner();renderQuestion()}
+function startReview(mode){var qs=reviewPool(mode);if(!qs.length){toast("当前没有这一类复习题，先继续学习新课程吧");return}run={mode:"review",reviewMode:mode,queue:qs,base:qs.length,index:0,hp:5,first:{},repeated:{},correct:0,selected:null,checked:false,order:null,prodText:""};openRunner();renderQuestion()}
+function openRunner(){$("#runner").classList.add("is-open");$("#runner").setAttribute("aria-hidden","false");document.body.classList.add("runner-open")}
+function closeRunner(){$("#runner").classList.remove("is-open");$("#runner").setAttribute("aria-hidden","true");$("#answerDock").style.display="";document.body.classList.remove("runner-open");run=null;renderAll()}
+function askQuit(){if(!run)return;if(run.finished||confirm("确定退出吗？本次未完成的练习不会计入进度。"))closeRunner()}
+$("#runnerQuit").addEventListener("click",askQuit);
+function currentQ(){return run&&run.queue[run.index]}
+function renderQuestion(){var q=currentQ();if(!q){finishRun();return}run.selected=null;run.checked=false;run.order=null;run.prodText="";$("#feedback").className="feedback";$("#feedback").innerHTML="";var uniqueAnswered=Object.keys(run.first).length;$("#runnerBar").style.width=Math.round(uniqueAnswered/run.base*100)+"%";renderFocus();var typeNames={mc:"单项判断",tf:"判断题",multi:"多项判断",order:"流程排序",prod:"开放表达",num:"数量级判断"};var h='<div class="question-kicker"><span>'+esc(typeNames[q.k]||"练习")+'</span><small>'+Math.min(uniqueAnswered+1,run.base)+' / '+run.base+(run.index>=run.base?" · 错题回炉":"")+'</small></div>'+(q.pre?'<div class="question-context">'+esc(q.pre)+'</div>':"")+'<h1>'+esc(q.q)+'</h1>';if(q.k==="mc"||q.k==="num"||q.k==="tf"){h+='<div class="choice-list">'+q.o.map(function(o,i){return'<button class="choice" data-option="'+i+'"><span class="choice-key">'+(i+1)+'</span><span>'+esc(o)+'</span></button>'}).join("")+'</div>'}else if(q.k==="multi"){h+='<div class="choice-list">'+q.o.map(function(o,i){return'<button class="choice" data-multi="'+i+'"><span class="choice-check"></span><span>'+esc(o)+'</span></button>'}).join("")+'</div>'}else if(q.k==="order"){run.order=shuffle(q.o);if(run.order.join("|")===q.o.join("|"))run.order.push(run.order.shift());h+=renderOrder()}else if(q.k==="prod"){h+='<textarea class="prod-area" id="prodArea" maxlength="1000" placeholder="先用自己的话写下来。10 个字就够开始，重点是把因果关系说清楚。"></textarea><div class="model-answer" id="modelAnswer"><b>参考表达</b><p>'+esc(q.model)+'</p></div><div class="self-grade" id="selfGrade"><button data-self="0">还需要练习</button><button data-self="1">我说清楚了</button></div>'}$("#questionWrap").innerHTML=h;setAnswerButton(q.k==="order","检查顺序");if(q.k==="order")setAnswerButton(true,"检查顺序");if(q.k==="prod")setAnswerButton(false,"查看参考表达")}
+function renderOrder(){return'<div class="order-list">'+run.order.map(function(o,i){return'<div class="order-item"><span class="order-num">'+(i+1)+'</span><span>'+esc(o)+'</span><span class="order-controls"><button data-move="up" data-i="'+i+'" '+(i===0?"disabled":"")+' aria-label="上移">↑</button><button data-move="down" data-i="'+i+'" '+(i===run.order.length-1?"disabled":"")+' aria-label="下移">↓</button></span></div>'}).join("")+'</div>'}
+function renderFocus(){$("#focusPips").innerHTML=[0,1,2,3,4].map(function(i){return'<i class="'+(i<run.hp?"":"off")+'"></i>'}).join("")}
+function setAnswerButton(enabled,label){var b=$("#answerBtn");if(!enabled&&label==="检查顺序")label="请选择答案";b.disabled=!enabled;b.textContent=label||"检查答案";b.className="answer-btn"}
+$("#questionWrap").addEventListener("click",function(e){if(!run||run.checked)return;var q=currentQ(),b=e.target.closest("[data-option]");if(b){run.selected=q.o[+b.dataset.option];$$('[data-option]',this).forEach(function(x){x.classList.toggle("is-selected",x===b)});setAnswerButton(true,"检查答案");return}b=e.target.closest("[data-multi]");if(b){var v=q.o[+b.dataset.multi];var arr=Array.isArray(run.selected)?run.selected:[];if(arr.indexOf(v)>=0)arr=arr.filter(function(x){return x!==v});else arr.push(v);run.selected=arr;b.classList.toggle("is-selected");setAnswerButton(arr.length>0,"检查答案");return}b=e.target.closest("[data-move]");if(b){var i=+b.dataset.i,j=b.dataset.move==="up"?i-1:i+1;var t=run.order[i];run.order[i]=run.order[j];run.order[j]=t;$(".order-list",this).outerHTML=renderOrder();return}b=e.target.closest("[data-self]");if(b){gradeQuestion(b.dataset.self==="1")}});
+$("#questionWrap").addEventListener("input",function(e){if(e.target.id==="prodArea"){run.prodText=e.target.value;setAnswerButton(e.target.value.trim().length>=10,"查看参考表达")}});
+$("#answerBtn").addEventListener("click",function(){if(!run)return;if(run.checked){run.index++;renderQuestion();return}var q=currentQ();if(q.k==="prod"){$("#modelAnswer").classList.add("is-visible");$("#selfGrade").classList.add("is-visible");this.disabled=true;this.textContent="请对照参考表达自评";return}var correct=false;if(q.k==="multi"){correct=sameSet(run.selected||[],q.a)}else if(q.k==="order"){correct=run.order.join("\u0001")===q.a.join("\u0001")}else{correct=run.selected===q.a}gradeQuestion(correct)});
+function sameSet(a,b){return a.length===b.length&&a.every(function(x){return b.indexOf(x)>=0})}
+function gradeQuestion(correct){var q=currentQ();if(run.checked)return;run.checked=true;if(!Object.prototype.hasOwnProperty.call(run.first,q.id)){run.first[q.id]=correct;S.stats.total++;if(correct){S.stats.correct++;run.correct++}var a=activityToday();a.correct=(a.correct||0)+(correct?1:0);S.activity[localDay()]=a}if(correct){schedule(q.id,true);if(S.mistakes[q.id]&&run.mode==="review")S.mistakes[q.id].resolved=true}else{run.hp=Math.max(0,run.hp-1);schedule(q.id,false);var m=S.mistakes[q.id]||(S.mistakes[q.id]={count:0,resolved:false});m.count++;m.last=Date.now();m.resolved=false;if(!run.repeated[q.id]){run.repeated[q.id]=true;run.queue.push(q)}}save();renderFocus();paintAnswers(q,correct);var f=$("#feedback");f.className="feedback is-visible "+(correct?"":"is-wrong");f.innerHTML='<span class="feedback-icon">'+(correct?"✓":"!")+'</span><span><b>'+(correct?"判断准确":"这次先把机制补上")+'</b><p>'+esc(q.w)+'</p><small>来源：'+esc(q.source||"白皮书 v2.1")+'</small></span>';setAnswerButton(true,run.index===run.queue.length-1?"查看结果":"继续");$("#answerBtn").classList.add(correct?"is-correct":"is-wrong")}
+function paintAnswers(q,correct){if(q.k==="mc"||q.k==="num"||q.k==="tf"){$$('[data-option]').forEach(function(b){b.disabled=true;var v=q.o[+b.dataset.option];if(v===q.a)b.classList.add("is-correct");else if(v===run.selected&&!correct)b.classList.add("is-wrong")})}else if(q.k==="multi"){$$('[data-multi]').forEach(function(b){b.disabled=true;var v=q.o[+b.dataset.multi];if(q.a.indexOf(v)>=0)b.classList.add("is-correct");else if((run.selected||[]).indexOf(v)>=0)b.classList.add("is-wrong")})}else if(q.k==="order"){$(".order-list").style.opacity=correct?"1":".72"}}
+function schedule(id,correct){var old=S.srs[id]||{level:0};if(correct){old.level=Math.min((old.level||0)+1,5);old.due=addDays(localDay(),[0,1,3,7,14,30][old.level])}else{old.level=0;old.due=localDay()}S.srs[id]=old}
 
-/* ── 学习路径 ──────────────────────────────────────────── */
-function paintPath() {
-  var firstOpen = null;
-  var h = C.map(function (u, ui) {
-    var dn = TOTAL_Q ? u.L.filter(function (_, i) { return S.done[u.id + "-" + i]; }).length : 0;
-    // 单元级解锁：上一单元做完 70% 才开这一单元。
-    // 原来只判 i === 0，而那个条件对每个单元都成立——11 个单元的第一节全部一开始就开着，
-    // 等于 11 条并行赛道，精心排的难度曲线被这一行取消了。
-    var pu = C[ui - 1];
-    var prevOK = !pu || pu.L.filter(function (_, k) { return S.done[pu.id + "-" + k]; }).length
-                        >= Math.ceil(pu.L.length * 0.7);
-    var nodes = u.L.map(function (l, i) {
-      var id = u.id + "-" + i, hasQuestions = l.q.length > 0;
-      var done = hasQuestions && !!S.done[id];
-      // 顺序解锁：本单元前一节做完才开下一节
-      var open = hasQuestions && (done || (prevOK && (i === 0 || !!S.done[u.id + "-" + (i - 1)])));
-      if (open && !done && !firstOpen) firstOpen = id;
-      var cls = !hasQuestions ? "empty-course" : (done ? "done" : (open ? (firstOpen === id ? "now" : "") : "lock"));
-      var ic = !hasQuestions ? "—" : (done ? "★" : (open ? "▶" : "🔒"));
-      // 平移只能加在 btnwrap（小元素）上——加在 .node 上会把整行宽的容器一起推出屏幕
-      var off = [0, 40, 56, 40, 0, -40, -56, -40][i % 8];
-      return '<div class="node">' +
-        '<div class="btnwrap" style="transform:translateX(' + off + 'px)">' +
-        (firstOpen === id && !done ? '<div class="now-tag">从这里开始</div>' : "") +
-        '<button class="nd ' + cls + '" data-l="' + id + '" ' + (open ? "" : "disabled") +
-        (!hasQuestions ? ' title="题目已清空，等待重做"' : "") + ">" + ic + "</button>" +
-        '<div class="ndlabel">' + esc(l.t) + "</div></div></div>";
-    }).join("");
-    return '<div class="uhead" style="background:' + u.c + '">' +
-      '<span class="ic">' + u.i + "</span><div><b>" + esc(u.t) + "</b><span>" + esc(u.s) + "</span></div>" +
-      '<span class="pg">' + dn + "/" + u.L.length + "</span></div>" +
-      '<div class="path">' + nodes + "</div>";
-  }).join("");
-  var notice = TOTAL_Q ? "" : '<div class="course-empty-banner"><b>题库已清空</b>' +
-    '<span>旧题已从源码和线上版本全部删除。11 个单元、56 节路径骨架暂时保留，等待重新设计。</span></div>';
-  $("#pathBox").innerHTML = notice + h +
-    '<div class="tiny" style="text-align:center;padding:26px 0 10px">全部 ' + allLessons.length +
-    " 节路径 · " + TOTAL_Q + " 道题<br>题库重做完成前，课程节点不可进入</div>";
-}
-function esc(s) {
-  return String(s == null ? "" : s).replace(/[&<>"]/g, function (m) {
-    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m];
-  });
-}
+function finishRun(){if(!run)return;run.finished=true;var isLesson=run.mode==="lesson",score=Math.round(run.correct/run.base*100),stars=score>=90?3:score>=70?2:1,xp=run.correct*(isLesson?10:5)+(isLesson?10:0),firstTime=false;if(isLesson){var id=run.lesson.id,old=S.done[id];firstTime=!old;S.done[id]={stars:Math.max(stars,old?old.stars||0:0),best:Math.max(score,old?old.best||0:0),attempts:(old?old.attempts||0:0)+1,at:Date.now(),correct:run.correct,total:run.base};S.xp+=xp;S.gems+=firstTime?(run.lesson.l.kind==="checkpoint"?15:5):1;touchActivity("lessons",xp);var day=localDay();if(!S.questRewards[day]){S.questRewards[day]=true;S.gems+=15;toast("今日航程完成 · 获得 15 枚知识晶体")}}else{S.xp+=xp;S.gems+=2;touchActivity("reviews",xp)}save();var title=isLesson?(stars===3?"掌握得很扎实":stars===2?"航向正确":"完成一次有效练习"):(score>=80?"记忆已加固":"复习完成");$("#questionWrap").innerHTML='<div class="result-screen"><div class="result-emblem">'+(isLesson?stars===3?"🏆":"⚓":"🧠")+'</div><h1>'+title+'</h1><p>'+(isLesson?esc(run.lesson.l.t):"系统已更新下一次复习时间")+'</p><div class="result-stats"><article><strong>'+score+'%</strong><span>首答正确率</span></article><article><strong>+'+xp+'</strong><span>经验值 XP</span></article><article><strong>'+(isLesson?"★".repeat(stars):run.base)+'</strong><span>'+(isLesson?"本次星级":"复习题数")+'</span></article></div><div class="result-actions"><button data-result="path">返回'+(isLesson?"路径":"复习舱")+'</button><button data-result="next">'+(isLesson?"继续下一节":"完成")+'</button></div></div>';$("#answerDock").style.display="none";$("#runnerBar").style.width="100%";if(isLesson&&stars===3)celebrate()}
+$("#questionWrap").addEventListener("click",function(e){var b=e.target.closest("[data-result]");if(!b||!run||!run.finished)return;var target=b.dataset.result,wasLesson=run.mode==="lesson";$("#answerDock").style.display="";closeRunner();switchView(wasLesson?"learn":"review",false);if(target==="next"&&wasLesson){var n=nextLesson();if(n&&!lessonDone(n.id))setTimeout(function(){openLessonPreview(n.id)},250)}});
 
-/* ── 课程引擎 ──────────────────────────────────────────── */
-var run = null;
+function celebrate(){var box=$("#celebration"),colors=["#0ba590","#f5c244","#f1843d","#8063d7","#3686df"];box.innerHTML="";box.setAttribute("aria-hidden","false");for(var i=0;i<55;i++){var s=document.createElement("i");s.className="confetti";s.style.left=Math.random()*100+"%";s.style.background=colors[i%colors.length];s.style.animationDelay=Math.random()*.35+"s";s.style.setProperty("--drift",(Math.random()*180-90)+"px");box.appendChild(s)}setTimeout(function(){box.innerHTML="";box.setAttribute("aria-hidden","true")},2300)}
+function toast(msg){var x=document.createElement("div");x.className="toast";x.textContent=msg;$("#toastStack").appendChild(x);setTimeout(function(){x.remove()},3000)}
 
-function start(lid, fromReview) {
-  var qs;
-  if (fromReview) {
-    // 错题优先（它们是最弱的），再补到期复习，最多 12 道，然后交错打散
-    var picked = {}, list = [];
-    S.wrong.forEach(function (w) {
-      var q = byId(w);
-      if (q && !picked[q.id] && list.length < 8) { picked[q.id] = 1; list.push(q); }
-    });
-    dueIds().forEach(function (id) {
-      var q = QMAP[id];
-      if (q && !picked[id] && list.length < 12) { picked[id] = 1; list.push(q); }
-    });
-    if (!list.length) return;
-    qs = interleave(list);
-  } else {
-    var p = lid.split("-"), u = C.filter(function (x) { return x.id === p[0]; })[0];
-    if (!u) return;
-    qs = u.L[+p[1]].q.slice();   // 复制一份：答错要往里插回炉题，不能改到原题库
-  }
-  if (!qs || !qs.length) return;
-  // 心数每节课重置，不跨天累计
-  run = { lid: lid, rev: !!fromReview, qs: qs, i: 0, ok: 0, first: 0, asked: 0,
-          prodN: 0, prodOk: 0,
-          hp: 5, picked: null, checked: false, pairState: null, seen: {} };
-  $("#lesson").classList.add("on");
-  document.body.style.overflow = "hidden";
-  paintQ();
-}
-function quit() {
-  $("#lesson").classList.remove("on");
-  document.body.style.overflow = "";
-  run = null; paintTop(); paintPath(); paintReview();
-}
-
-function hearts(n) { return "❤️".repeat(Math.max(0, n)) + "🖤".repeat(Math.max(0, 5 - n)); }
-
-/* ── 间隔重复 ────────────────────────────────────────────
-   原来的做法有个教科书级的反例：错题在错题本里答对一次就被永久删除，
-   而复习入口随时可点——典型路径是「答错 → 看解释 → 30 秒后答对 → 永久毕业」。
-   那次答对时答案还在工作记忆里，不提供任何长期记忆证据。
-   下面是 SM-2 的压缩版：答错必须重新走学习步，答对间隔递增。
-   SPEED 0.6 是速成压缩系数——目标 6—8 周成型，不是五年。            */
-var SPEED = 0.6;
-function srsGet(id) {
-  return S.srs[id] || { e: 2.5, ivl: 0, due: 0, reps: 0, lapses: 0, step: 0, last: 0 };
-}
-function srsUpdate(id, right, selfGrade) {
-  if (!id) return;
-  var now = Date.now(), st = srsGet(id);
-  if (!right) {
-    st.lapses++;
-    st.e = Math.max(1.3, st.e - 0.2);
-    st.step = 0;
-    st.ivl = 10 / 1440;                       // 10 分钟后才可能再出现，不当场毕业
-    if (selfGrade === 0) st.e = Math.max(1.3, st.e - 0.1);   // 完全说不出来，降得更狠
-  } else if (st.step === 0) {
-    st.step = 1; st.ivl = 1;                  // 学习步毕业：1 天
-  } else {
-    st.reps++;
-    st.ivl = st.reps === 1 ? 3 : Math.max(1, Math.round(st.ivl * st.e * SPEED));
-    st.e = Math.min(2.8, st.e + 0.1);
-  }
-  st.ivl = st.ivl * (0.9 + Math.random() * 0.2);   // ±10% 抖动，防止同一天堆一堆
-  st.due = now + st.ivl * 864e5;
-  st.last = now;
-  S.srs[id] = st;
-}
-// 到期的题，逾期越久越靠前
-function dueIds() {
-  var now = Date.now(), out = [];
-  for (var id in S.srs) {
-    var st = S.srs[id];
-    if (QMAP[id] && st.due && st.due <= now)
-      out.push({ id: id, over: (now - st.due) / (st.ivl * 864e5 || 1) });
-  }
-  out.sort(function (a, b) { return b.over - a.over; });
-  return out.map(function (x) { return x.id; });
-}
-// 交错：相邻两题尽量不同单元、不同题型。
-// 每节课连着考同一主题时，做到第三题就已经靠上下文提示而不是提取了。
-function interleave(a) {
-  for (var pass = 0; pass < 40; pass++) {
-    var ok = true;
-    for (var i = 1; i < a.length; i++) {
-      var same = (a[i].id || "").split("-")[0] === (a[i - 1].id || "").split("-")[0]
-              || a[i].k === a[i - 1].k;
-      if (same) {
-        var j = i + 1 + ((Math.random() * Math.max(1, a.length - i - 1)) | 0);
-        if (j < a.length) { var t = a[i]; a[i] = a[j]; a[j] = t; ok = false; }
-      }
-    }
-    if (ok) break;
-  }
-  return a;
-}
-
-function paintQ() {
-  var q = run.qs[run.i];
-  $("#lbar").style.width = (run.i / run.qs.length * 100) + "%";
-  $("#lhearts").textContent = hearts(run.hp);
-  run.picked = null; run.checked = false;
-  var fb = $("#fb"); fb.className = "fb"; $("#fbmsg").style.display = "none";
-  var act = $("#act"); act.className = "btn"; act.disabled = true;
-
-  // 情景前情：多步决策题共用的一段叙述
-  var pre = q.pre ? '<div class="scene">' + q.pre + "</div>" : "";
-
-  var body = "";
-  if (q.k === "tf") {
-    act.textContent = "选一个答案";
-    body = pre + '<div class="qtype">判断题</div><div class="qtext">' + q.q + "</div>" +
-      '<div class="opts"><button class="opt" data-v="1">✓　对</button>' +
-      '<button class="opt" data-v="0">✗　错</button></div>';
-  } else if (q.k === "mc" || q.k === "bank" || q.k === "num") {
-    act.textContent = "选一个答案";
-    var label = q.k === "bank" ? "填空题" : (q.k === "num" ? "数量级判断" : "选择题");
-    body = pre + '<div class="qtype">' + label + "</div>" +
-      '<div class="qtext">' + q.q + "</div><div class=\"opts\">" +
-      q.o.map(function (o, i) { return '<button class="opt" data-v="' + i + '">' + esc(o) + "</button>"; }).join("") +
-      "</div>";
-  } else if (q.k === "order") {
-    // 排序题：按正确顺序依次点，点错立刻标红
-    act.textContent = "按顺序全部点完";
-    run.orderState = { picked: [], err: false };
-    var items = q.o.map(function (o, i) { return { t: o, i: i }; });
-    shuffle(items);
-    body = pre + '<div class="qtype">排序题</div><div class="qtext">' + q.q + "</div>" +
-      '<div class="orderslots" id="oslots"></div><div class="opts">' +
-      items.map(function (x) { return '<button class="opt oi" data-v="' + x.i + '">' + esc(x.t) + "</button>"; }).join("") +
-      "</div>";
-  } else if (q.k === "prod") {
-    // 产出题：不给选项。先自己说，再对答案，三档自评。
-    // 这是全库唯一训练「提取」而不是「再认」的题型——
-    // 老板问「这条船的红线日租是多少」时，你不能说「给我四个选项」。
-    act.textContent = "写完了，看答案";
-    act.disabled = false; act.className = "btn on";
-    run.revealed = false;
-    body = pre + '<div class="qtype prod">产出题 · 不给选项</div>' +
-      '<div class="qtext">' + q.q + "</div>" +
-      '<textarea class="pin" id="pin" rows="4" ' +
-      'placeholder="写下来，或者对着屏幕说一遍 —— 说完再点下面。&#10;想不起来也先写你记得的那部分，空着点开答案等于没练。"></textarea>' +
-      '<div id="model"></div>';
-  } else if (q.k === "pair") {
-    act.textContent = "全部配对后继续";
-    var L = q.p.map(function (p, i) { return { t: p[0], i: i }; });
-    var R = q.p.map(function (p, i) { return { t: p[1], i: i }; });
-    shuffle(R);
-    run.pairState = { left: L, right: R, sel: null, matched: 0 };
-    body = pre + '<div class="qtype">配对题</div><div class="qtext" style="font-size:18px">把左右两边连起来</div>' +
-      '<div class="pairgrid"><div class="pcol">' +
-      L.map(function (x) { return '<button class="pi" data-s="L" data-i="' + x.i + '">' + esc(x.t) + "</button>"; }).join("") +
-      '</div><div class="pcol">' +
-      R.map(function (x) { return '<button class="pi" data-s="R" data-i="' + x.i + '">' + esc(x.t) + "</button>"; }).join("") +
-      "</div></div>";
-  }
-  $("#lbody").innerHTML = body;
-  $("#lbody").scrollTop = 0;
-}
-function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = (Math.random() * (i + 1)) | 0; var t = a[i]; a[i] = a[j]; a[j] = t; } }
-
-// 选项点击
-$("#lbody").addEventListener("click", function (e) {
-  if (!run) return;
-  var q = run.qs[run.i];
-
-  // 排序题：依次点击，顺序错了当场标红并记一次错
-  var oi = e.target.closest(".oi");
-  if (oi && q.k === "order" && !run.checked) {
-    var st = run.orderState, want = st.picked.length;
-    if (+oi.dataset.v === want) {
-      oi.classList.add("gone"); st.picked.push(want);
-      $("#oslots").innerHTML = st.picked.map(function (i, n) {
-        return '<span class="oslot">' + (n + 1) + ". " + esc(q.o[i]) + "</span>";
-      }).join("");
-      if (st.picked.length === q.o.length) {
-        var a3 = $("#act"); a3.disabled = false; a3.className = "btn on"; a3.textContent = "继续";
-        run.picked = 1;
-      }
-    } else {
-      st.err = true; oi.classList.add("err");
-      setTimeout(function () { oi.classList.remove("err"); }, 480);
-    }
-    return;
-  }
-
-  // 产出题自评：2 = 全说出来了，1 = 说出一半，0 = 说不出来
-  var g = e.target.closest(".selfgrade .opt");
-  if (g && q.k === "prod" && !run.checked) {
-    $$("#lbody .selfgrade .opt").forEach(function (x) { x.classList.remove("sel"); });
-    g.classList.add("sel");
-    run.picked = +g.dataset.g;
-    var ag = $("#act"); ag.disabled = false; ag.className = "btn on"; ag.textContent = "继续";
-    return;
-  }
-
-  var o = e.target.closest(".opt");
-  if (o && !run.checked && q.k !== "order" && q.k !== "prod") {
-    $$("#lbody .opt").forEach(function (x) { x.classList.remove("sel"); });
-    o.classList.add("sel");
-    run.picked = +o.dataset.v;
-    var a = $("#act"); a.disabled = false; a.className = "btn on"; a.textContent = "检查";
-    return;
-  }
-
-  var p = e.target.closest(".pi");
-  if (p && q.k === "pair" && !run.checked) {
-    var st = run.pairState;
-    if (!st.sel) {
-      $$("#lbody .pi").forEach(function (x) { x.classList.remove("sel"); });
-      p.classList.add("sel"); st.sel = p; return;
-    }
-    if (st.sel === p) { p.classList.remove("sel"); st.sel = null; return; }
-    if (st.sel.dataset.s === p.dataset.s) {   // 同侧改选
-      $$("#lbody .pi").forEach(function (x) { x.classList.remove("sel"); });
-      p.classList.add("sel"); st.sel = p; return;
-    }
-    if (st.sel.dataset.i === p.dataset.i) {   // 配对成功
-      st.sel.classList.add("gone"); p.classList.add("gone");
-      st.sel.classList.remove("sel"); st.sel = null; st.matched++;
-      if (st.matched === q.p.length) {
-        var a2 = $("#act"); a2.disabled = false; a2.className = "btn on"; a2.textContent = "继续";
-        run.picked = 1;
-      }
-    } else {                                   // 配错
-      var w1 = st.sel, w2 = p;
-      w1.classList.add("err"); w2.classList.add("err");
-      run.pairErr = true;
-      setTimeout(function () { w1.classList.remove("err", "sel"); w2.classList.remove("err"); }, 520);
-      st.sel = null;
-    }
-    return;
-  }
-});
-
-// 检查 / 继续
-$("#act").addEventListener("click", function () {
-  if (!run) return;
-  var q = run.qs[run.i];
-
-  // 产出题第一步：揭示参考要点 + 三档自评。此时还不判分。
-  if (q.k === "prod" && !run.revealed) {
-    run.revealed = true;
-    var ta = $("#pin"); if (ta) ta.disabled = true;
-    $("#model").innerHTML =
-      '<div class="model"><div class="mh">参考要点 · 对照你刚才说的</div>' +
-      q.m.map(function (p, i) {
-        return '<div class="mp"><b>' + (i + 1) + "</b><span>" + p + "</span></div>";
-      }).join("") + "</div>" +
-      '<div class="qtype" style="margin-top:16px">这 ' + q.m.length + ' 条，你说到了几条？</div>' +
-      '<div class="opts selfgrade">' +
-      '<button class="opt" data-g="2">基本都说出来了</button>' +
-      '<button class="opt" data-g="1">说出一半</button>' +
-      '<button class="opt" data-g="0">说不出来</button></div>';
-    this.disabled = true; this.className = "btn"; this.textContent = "上面选一个自评";
-    $("#lbody").scrollTop = $("#lbody").scrollHeight;
-    return;
-  }
-
-  if (!run.checked) {
-    run.checked = true;
-    var right;
-    if (q.k === "pair") right = !run.pairErr;
-    else if (q.k === "order") right = !(run.orderState && run.orderState.err);
-    else if (q.k === "prod") right = (run.picked === 2);
-    else right = (run.picked === q.a);
-    run.pairErr = false;
-
-    if (q.k !== "pair" && q.k !== "order" && q.k !== "prod") {
-      $$("#lbody .opt").forEach(function (x) {
-        var v = +x.dataset.v;
-        if (v === q.a) x.classList.add("ok");
-        else if (v === run.picked) x.classList.add("err");
-        x.classList.remove("sel");
-      });
-    }
-
-    // 首答正确率：回炉重做的不计入，否则结算页会把「多做两遍才对」显示成高分
-    if (!run.seen[q.id]) {
-      run.asked++; if (right) run.first++;
-      if (q.k === "prod") { run.prodN++; if (right) run.prodOk++; }
-    }
-
-    srsUpdate(q.id, right, q.k === "prod" ? run.picked : null);
-
-    var fb = $("#fb"), msg = $("#fbmsg");
-    if (right) {
-      run.ok++;
-      fb.className = "fb ok";
-      msg.innerHTML = '<span class="ic">✅</span><div><b>' +
-        (q.k === "prod" ? "说出来了才算会" : "答对了") + "</b>" +
-        (q.w ? '<div class="why">' + q.w + "</div>" : "") + "</div>";
-      // 复习模式答对才移出错题本（按 id 比较，跨会话也有效）
-      if (run.rev) S.wrong = S.wrong.filter(function (w) { return w.id !== q.id; });
-    } else {
-      // 产出题是自评，不扣心——诚实自评的人不该被惩罚
-      if (q.k !== "prod") run.hp--;
-      fb.className = "fb err";
-      msg.innerHTML = '<span class="ic">' + (q.k === "prod" ? "📝" : "❌") + "</span><div><b>" +
-        (q.k === "prod"
-          ? (run.picked === 1 ? "说出一半 —— 这题记进错题本了" : "说不出来 —— 这才是你真正的边界")
-          : "再看一眼") + "</b>" +
-        (q.w ? '<div class="why">' + q.w + "</div>" : "") + "</div>";
-      if (q.id && !S.wrong.some(function (w) { return w.id === q.id; }))
-        S.wrong.push({ id: q.id, t: Date.now() });
-      // 当场回炉：把这道题插回本轮队列的 +3 和 +9 位——
-      // 答错的代价是「多做两遍」，不是「今天不许再学」。
-      // 隔 3 题、隔 9 题本身就是最短的两级间隔，重复被放在了正确的位置。
-      if (!run.rev && !run.seen[q.id]) {
-        run.seen[q.id] = 1;
-        run.qs.splice(Math.min(run.i + 3, run.qs.length), 0, q);
-        run.qs.splice(Math.min(run.i + 9, run.qs.length), 0, q);
-      }
-      $("#lhearts").textContent = hearts(run.hp);
-    }
-    msg.style.display = "flex";
-    save();
-
-    var a = $("#act");
-    a.className = "btn " + (right ? "on" : "no");
-    a.textContent = run.hp <= 0 ? "本轮结束" : (run.i === run.qs.length - 1 ? "完成" : "继续");
-    a.disabled = false;
-    return;
-  }
-
-  if (run.hp <= 0) { finish(false); return; }
-  run.i++;
-  if (run.i >= run.qs.length) { finish(true); return; }
-  paintQ();
-});
-
-function finish(cleared) {
-  // XP 按提取难度给：产出题额外 4 分。
-  // 已完成的课重做不再计 XP——否则重刷一节已知答案的旧课就能稳定刷分和续连续天数，
-  // 那样 XP 测量的是「有没有打开 App」，不是「有没有学到」。
-  var redone = !run.rev && !!S.done[run.lid];
-  var xp = redone ? 0 : (cleared ? (10 + run.ok * 2 + run.prodOk * 4) : run.ok * 2);
-  S.xp += xp;
-  if (cleared && !run.rev) { S.done[run.lid] = 1; bumpStreak(); }
-  if (cleared && run.rev) bumpStreak();
-  save();
-  $("#lbar").style.width = "100%";
-  $("#fb").className = "fb"; $("#fbmsg").style.display = "none";
-  // 显示「首答正确率」而不是总正确率：回炉重做的不算。
-  // 一个答错三次、回炉后蒙对的人，本来会看到 100%，那是最有害的一种反馈——
-  // 它把「知道自己不会」的人变成「以为自己会」的人。
-  var fr = run.asked ? Math.round(run.first / run.asked * 100) : 0;
-  var redo = run.asked - run.first;
-  $("#lbody").innerHTML =
-    '<div class="done"><div class="big">' + (cleared ? "🎉" : "💪") + "</div>" +
-    "<h2>" + (cleared ? "这一节拿下了" : "错太多了，先看看解析") + "</h2>" +
-    "<p>" + (cleared
-      ? (redo ? "有 " + redo + " 道是回炉之后才对的，它们已经进了错题本"
-              : "全部一次答对，干净利落")
-      : "错过的题都在错题本里，随时可以重来——不用等明天") + "</p>" +
-    '<div class="rewards"><div class="rw"><b>获得经验</b><span>+' + xp +
-      (redone ? '<i class="tiny">重做不计分</i>' : "") + "</span></div>" +
-    '<div class="rw g"><b>首答正确率</b><span>' + fr + "%</span></div>" +
-    (run.prodN ? '<div class="rw p"><b>产出率</b><span>' +
-      Math.round(run.prodOk / run.prodN * 100) + "%</span></div>" : "") + "</div>" +
-    (run.prodN
-      ? '<p class="hint"><b>产出率才是熟手度。</b>选择题答对只说明你认得出，' +
-        '产出题答对才说明你张得开嘴——老板问「这条船的红线日租是多少」时，' +
-        '你不能说「给我四个选项」。</p>'
-      : (redo ? '<p class="hint">首答正确率只算第一次的答案。' +
-                '<b>回炉做对不等于会</b>——那道题真正的考验是三天以后。</p>' : "")) +
-    "</div>";
-  var a = $("#act"); a.className = "btn on"; a.textContent = "回到路径"; a.disabled = false;
-  a.onclick = function () { a.onclick = null; quit(); };
-}
-
-$("#quit").addEventListener("click", quit);
-document.addEventListener("click", function (e) {
-  var n = e.target.closest(".nd");
-  if (n && n.dataset.l) start(n.dataset.l, false);
-});
-
-/* ── 错题本 ────────────────────────────────────────────── */
-function paintReview() {
-  var box = $("#reviewBox");
-  // 复习池 = 错题 + 到期该重做的题。后者是间隔重复排出来的，
-  // 「答对过」不等于「还记得」——所以已经做对的题也会按间隔回来考你。
-  var wrongIds = {};
-  S.wrong.forEach(function (w) { var q = byId(w); if (q) wrongIds[q.id] = 1; });
-  var due = dueIds().filter(function (id) { return !wrongIds[id]; });
-  var nWrong = Math.min(8, Object.keys(wrongIds).length);
-  var nDue = Math.min(12 - nWrong, due.length);
-
-  if (!S.wrong.length && !due.length) {
-    box.innerHTML = TOTAL_Q
-      ? '<div class="empty"><div class="big">🌱</div>错题清空了，也没有到期要复习的<br>' +
-        '<span class="tiny">做过的题会按间隔自动回来考你</span></div>'
-      : '<div class="empty"><div class="big">🧹</div>题库已清空<br>' +
-        '<span class="tiny">旧错题和复习记录已经失效，等待新题库上线</span></div>';
-    return;
-  }
-  box.innerHTML = '<button class="btn on" id="revGo" style="margin-bottom:10px">开始复习 ' +
-    (nWrong + nDue) + " 道</button>" +
-    '<div class="revmeta">错题 <b>' + Object.keys(wrongIds).length + "</b> 道" +
-    (due.length ? '　·　今天到期 <b>' + due.length + "</b> 道" : "") +
-    (nDue ? "" : (due.length ? "" : "　·　暂无到期")) + "</div>" +
-    S.wrong.slice(0, 30).map(function (w) {
-      var q = byId(w);
-      if (!q) return "";
-      var stem = q.k === "pair" ? "配对：" + q.p.map(function (p) { return p[0]; }).join(" / ") : q.q;
-      return '<div class="tcard"><div class="t">' + stem + '</div>' +
-             (q.w ? '<div class="d">' + q.w + "</div>" : "") + "</div>";
-    }).join("");
-  $("#revGo").addEventListener("click", function () { start("review", true); });
-}
-
-/* ── 术语 ──────────────────────────────────────────────── */
-var termKw = "", termCat = "", termLimit = 60;
-function termGroup(t) { return (t.c || "其他").split("·")[0]; }
-function initTermCategories() {
-  var counts = {};
-  TERMS.forEach(function (t) { var c = termGroup(t); counts[c] = (counts[c] || 0) + 1; });
-  $("#tCategory").innerHTML = '<option value="">全部类别（' + TERMS.length + ")</option>" +
-    Object.keys(counts).sort().map(function (c) {
-      return '<option value="' + esc(c) + '">' + esc(c) + "（" + counts[c] + "）</option>";
-    }).join("");
-}
-function paintTerms(kw, reset) {
-  if (typeof kw === "string") termKw = kw;
-  if (reset) termLimit = 60;
-  kw = termKw.trim().toLowerCase();
-  var list = TERMS.filter(function (t) { return !termCat || termGroup(t) === termCat; });
-  if (kw) {
-    list = list.map(function (t) {
-      var s = 0, lt = t.t.toLowerCase();
-      if (lt === kw) s += 400; else if (lt.indexOf(kw) === 0) s += 220; else if (lt.indexOf(kw) >= 0) s += 130;
-      if (t.cn && t.cn.toLowerCase().indexOf(kw) >= 0) s += 90;
-      if (t.en && t.en.toLowerCase().indexOf(kw) >= 0) s += 70;
-      if (t.a && t.a.join(" ").toLowerCase().indexOf(kw) >= 0) s += 110;
-      if (t.d && t.d.toLowerCase().indexOf(kw) >= 0) s += 22;
-      if (t.n && t.n.toLowerCase().indexOf(kw) >= 0) s += 12;
-      return { t: t, s: s };
-    }).filter(function (o) { return o.s > 0; }).sort(function (a, b) { return b.s - a.s; })
-      .map(function (o) { return o.t; });
-  }
-  var shown = Math.min(termLimit, list.length);
-  $("#tShown").textContent = "显示 " + shown + " / " + list.length;
-  $("#termBox").innerHTML = list.slice(0, shown).map(function (t) {
-    return '<div class="tcard"><div class="trow"><div class="t">' + esc(t.t) +
-      (t.cn ? "<span>" + esc(t.cn) + "</span>" : "") + "</div>" +
-      '<span class="tcat">' + esc(termGroup(t)) + "</span></div>" +
-      (t.en ? '<div class="en">' + esc(t.en) + "</div>" : "") +
-      (t.d ? '<div class="d">' + t.d + "</div>" : "") +
-      (t.u ? '<div class="u"><b>怎么用</b> ' + t.u + "</div>" : "") +
-      (t.n ? '<div class="n">⚑ ' + t.n + "</div>" : "") + "</div>";
-  }).join("") || '<div class="empty"><div class="big">🔍</div>没找到<br><span class="tiny">试试英文缩写，或换成中文</span></div>';
-  $("#termMore").innerHTML = shown < list.length ?
-    '<button class="morebtn" id="tMore">继续显示（还有 ' + (list.length - shown) + " 条）</button>" : "";
-}
-$("#tSearch").addEventListener("input", function () { paintTerms(this.value, true); });
-$("#tCategory").addEventListener("change", function () {
-  termCat = this.value; paintTerms(termKw, true);
-});
-$("#termMore").addEventListener("click", function (e) {
-  if (!e.target.closest("#tMore")) return;
-  termLimit += 60; paintTerms();
-});
-
-/* ── 导航 ──────────────────────────────────────────────── */
-$("#nav").addEventListener("click", function (e) {
-  var b = e.target.closest("button[data-p]"); if (!b) return;
-  $$(".nav button").forEach(function (x) { x.classList.toggle("on", x === b); });
-  $$(".page").forEach(function (p) { p.classList.toggle("on", p.id === b.dataset.p); });
-  window.scrollTo(0, 0);
-  if (b.dataset.p === "pReview") paintReview();
-  if (b.dataset.p === "pMe") paintTop();
-});
-
-$("#reset").addEventListener("click", function () {
-  if (!confirm("清空全部进度、经验和错题本？此操作不可撤销。")) return;
-  try { localStorage.removeItem(KEY); } catch (e) {}
-  S = load(); save(); paintTop(); paintPath(); paintReview();
-  alert("已重置");
-});
-
-/* ── 启动 ──────────────────────────────────────────────── */
-$("#tCount").textContent = TERMS.length;
-initTermCategories();
-paintTop(); paintPath(); paintReview(); paintTerms("", true);
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function () {
-    navigator.serviceWorker.register("sw.js").catch(function () {});
-  });
-}
+if("serviceWorker" in navigator&&location.protocol.indexOf("http")==0){window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(function(){})})}
+renderAll();switchView((location.hash||"#learn").slice(1),false);
 })();

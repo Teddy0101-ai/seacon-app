@@ -2,101 +2,146 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no,maximum-scale=1">
-<title>航运特训 · Seacon</title>
-<meta name="description" content="《主流船型必须搞懂的知识白皮书》v2.1 学习路径与术语库。旧题库已清空，课程内容正在重新设计。">
-<meta name="theme-color" content="#0b5c8a">
-<!-- iOS 全屏 App 模式 -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#f7f8f2">
+<meta name="description" content="基于《主流船型必须搞懂的知识白皮书》v2.1 重构的航运学习系统：16 单元、80 节、448 道逐题分析课程与 392 条术语。">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="航运特训">
+<meta name="apple-mobile-web-app-title" content="Seacon 学院">
 <meta name="format-detection" content="telephone=no">
+<title>Seacon 航运学院</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<svg class="svg-sprite" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11.4 12 4l9 7.4v8.1a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5z"/><path d="M9 21v-6h6v6"/></symbol>
+  <symbol id="i-review" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/><path d="M12 8v4l2.8 2"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11a2 2 0 0 1 2 2v16a2 2 0 0 0-2-2H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v18a2 2 0 0 1 2-2h2.5a2.5 2.5 0 0 1 2.5 2.5z"/></symbol>
+  <symbol id="i-growth" viewBox="0 0 24 24"><path d="M5 20v-7h4v7M10 20V8h4v12M15 20V4h4v16"/><path d="M3 20h18"/></symbol>
+  <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 22c4.4 0 7-2.9 7-6.8 0-3.2-1.8-6.2-5.4-9.2.2 2.5-1.1 3.8-2.2 4.7.2-3.8-1.7-6.3-3.6-8.7.2 3.9-2.8 6.4-2.8 10.7C5 18.3 8.1 22 12 22z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2.8 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.4 6.3-.9z"/></symbol>
+  <symbol id="i-gem" viewBox="0 0 24 24"><path d="m4 8 4-5h8l4 5-8 13z"/><path d="m4 8 8 13 8-13M8 3l4 5 4-5M4 8h16"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8.5 10V7a3.5 3.5 0 0 1 7 0v3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12.5 5 5L20 6.5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 1.7 5.3L19 9l-5.3 1.7L12 16l-1.7-5.3L5 9l5.3-1.7zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2.5 20 6v5.5c0 5-3.2 8.6-8 10-4.8-1.4-8-5-8-10V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></symbol>
+</svg>
 
-<!-- ══════ 顶栏 ══════ -->
-<div class="top" id="top">
-  <div class="stat" style="color:var(--gold)"><i>🔥</i><span id="sStreak">0</span></div>
-  <div class="stat" style="color:var(--sky)"><i>⭐</i><span id="sXp">0</span></div>
-  <div class="sp"></div>
-  <div class="stat" style="color:var(--bad)" title="错题本"><i>📕</i><span id="sHeart">0</span></div>
+<div class="app-shell">
+  <aside class="side-rail" aria-label="主导航">
+    <a class="brand" href="#learn" data-view-link="learn" aria-label="Seacon 航运学院首页">
+      <span class="brand-mark"><span>SC</span></span>
+      <span class="brand-copy"><b>SEACON</b><small>航运学院</small></span>
+    </a>
+    <nav class="primary-nav">
+      <button class="nav-item is-active" data-view="learn"><svg><use href="#i-home"/></svg><span>学习路径</span><em id="navNext">继续</em></button>
+      <button class="nav-item" data-view="review"><svg><use href="#i-review"/></svg><span>智能复习</span><em id="navDue">0</em></button>
+      <button class="nav-item" data-view="library"><svg><use href="#i-book"/></svg><span>知识库</span><em>392</em></button>
+      <button class="nav-item" data-view="growth"><svg><use href="#i-growth"/></svg><span>成长中心</span></button>
+    </nav>
+    <div class="side-quote">
+      <span class="eyebrow">学习方法</span>
+      <p>不是背下答案，而是知道先问什么、用什么证据、何时停止。</p>
+    </div>
+    <button class="profile-chip" data-view="growth">
+      <span class="avatar">航</span><span><b>航运学习者</b><small id="rankLabel">见习水手</small></span><svg><use href="#i-arrow"/></svg>
+    </button>
+  </aside>
+
+  <main class="main-stage">
+    <header class="mobile-top">
+      <a class="mini-brand" href="#learn" data-view-link="learn"><span>SC</span><b>SEACON</b></a>
+      <div class="mobile-stats"><span><svg><use href="#i-fire"/></svg><b data-streak>0</b></span><span><svg><use href="#i-star"/></svg><b data-xp>0</b></span></div>
+    </header>
+
+    <section class="view is-active" id="view-learn" data-page="learn">
+      <div class="view-head learn-head">
+        <div><span class="eyebrow">你的航程</span><h1>把一条船，真正看明白</h1><p>白皮书 v2.1 已重构为 16 个能力单元。每节先学模型，再用真实误区练判断。</p></div>
+        <button class="primary-action" id="continueBtn"><span><small>下一步</small><b id="continueLabel">从第 1 单元开始</b></span><svg><use href="#i-arrow"/></svg></button>
+      </div>
+      <div class="journey-strip">
+        <div class="journey-copy"><span class="ring-mini" id="courseRing"><b>0%</b></span><span><b>全航程进度</b><small id="courseProgressText">0 / 80 节完成</small></span></div>
+        <div class="journey-track"><i id="courseProgressBar"></i></div>
+        <div class="journey-meta"><span><strong id="masteredCount">0</strong> 已掌握</span><span><strong id="courseQuestionCount">448</strong> 深度练习</span></div>
+      </div>
+      <div id="coursePath" class="course-path" aria-live="polite"></div>
+    </section>
+
+    <section class="view" id="view-review" data-page="review">
+      <div class="view-head"><div><span class="eyebrow">记忆维护</span><h1>智能复习舱</h1><p>系统把到期、做错和低掌握度知识分开，不用从头刷整套题。</p></div></div>
+      <div class="review-hero">
+        <div class="review-orb"><svg><use href="#i-review"/></svg><i></i></div>
+        <div><span class="eyebrow">今日建议</span><h2 id="reviewHeadline">今天没有到期题</h2><p id="reviewSummary">完成一节课程后，系统会自动生成间隔复习计划。</p><button class="primary-action compact" id="smartReviewBtn"><span><small>个性化队列</small><b>开始智能复习</b></span><svg><use href="#i-arrow"/></svg></button></div>
+      </div>
+      <div class="review-grid" id="reviewGrid"></div>
+      <div class="section-title"><div><span class="eyebrow">能力诊断</span><h2>哪里最值得再学一次</h2></div></div>
+      <div class="mastery-list" id="weakList"></div>
+    </section>
+
+    <section class="view" id="view-library" data-page="library">
+      <div class="view-head"><div><span class="eyebrow">392 条白皮书术语</span><h1>航运知识库</h1><p>搜英文、中文、缩写或别名；每条都保留定义、实务提醒和使用场景。</p></div></div>
+      <label class="search-shell"><svg><use href="#i-search"/></svg><input id="termSearch" type="search" autocomplete="off" placeholder="搜索：Fixture Recap、吃水、K&R…"><kbd>⌘ K</kbd></label>
+      <div class="filter-row" id="termFilters" aria-label="术语分类"></div>
+      <div class="library-meta"><b id="termResultTitle">全部术语</b><span id="termResultCount">392 条</span></div>
+      <div class="term-grid" id="termGrid"></div>
+      <button class="load-more" id="termMore">加载更多术语</button>
+    </section>
+
+    <section class="view" id="view-growth" data-page="growth">
+      <div class="profile-hero">
+        <div class="avatar large">航</div><div><span class="eyebrow">个人航海日志</span><h1>航运学习者</h1><p id="profileRank">见习水手 · 距下一等级还差 100 XP</p></div>
+        <button class="ghost-action" id="exportProgress">导出进度</button>
+      </div>
+      <div class="stat-grid">
+        <article><svg class="orange"><use href="#i-fire"/></svg><strong data-streak>0</strong><span>连续天数</span><small>保持节奏</small></article>
+        <article><svg class="blue"><use href="#i-star"/></svg><strong data-xp>0</strong><span>累计 XP</span><small id="xpToday">今日 +0</small></article>
+        <article><svg class="violet"><use href="#i-target"/></svg><strong id="accuracyStat">—</strong><span>首答正确率</span><small>理解质量</small></article>
+        <article><svg class="green"><use href="#i-shield"/></svg><strong id="masteryStat">0%</strong><span>课程掌握度</span><small id="doneLessonsStat">0 节完成</small></article>
+      </div>
+      <div class="growth-layout">
+        <article class="panel heat-panel"><div class="panel-head"><div><span class="eyebrow">最近 12 周</span><h2>学习热力图</h2></div><span id="activeDays">0 个活跃日</span></div><div class="heatmap" id="heatmap"></div><div class="heat-key"><span>少</span><i></i><i></i><i></i><i></i><span>多</span></div></article>
+        <article class="panel quest-panel"><div class="panel-head"><div><span class="eyebrow">今日任务</span><h2>离港清单</h2></div><svg><use href="#i-target"/></svg></div><div id="dailyQuest"></div></article>
+      </div>
+      <div class="section-title"><div><span class="eyebrow">里程碑</span><h2>航海徽章</h2></div></div>
+      <div class="badge-grid" id="badgeGrid"></div>
+      <div class="danger-zone"><div><b>重新开始课程</b><span>会删除本设备上的 XP、错题和所有学习进度。</span></div><button id="resetProgress">清空进度</button></div>
+    </section>
+  </main>
+
+  <aside class="right-rail">
+    <div class="rail-stats"><span title="连续学习"><svg class="orange"><use href="#i-fire"/></svg><b data-streak>0</b></span><span title="经验值"><svg class="blue"><use href="#i-star"/></svg><b data-xp>0</b></span><span title="知识晶体"><svg class="violet"><use href="#i-gem"/></svg><b data-gems>0</b></span></div>
+    <article class="rail-card quest-card"><div class="rail-card-head"><span><svg><use href="#i-target"/></svg><b>今日航程</b></span><small id="questPct">0%</small></div><p id="questCopy">完成 1 节课程，获得今日航程奖励。</p><div class="meter"><i id="questBar"></i></div><div class="quest-reward"><span><svg><use href="#i-gem"/></svg> +15</span><small id="questState">0 / 1 节</small></div></article>
+    <article class="rail-card league-card"><span class="eyebrow">当前等级</span><div class="league-mark"><span>⚓</span><i></i></div><h3 id="railRank">见习水手</h3><p id="railRankCopy">完成课程、复习错题，积累你的专业判断力。</p><div class="meter"><i id="rankBar"></i></div><small id="rankProgress">0 / 100 XP</small></article>
+    <article class="rail-card source-card"><svg><use href="#i-spark"/></svg><div><b>内容可追溯</b><p>每节课都标注白皮书章节；教学数字不冒充当前市场报价。</p></div></article>
+  </aside>
 </div>
 
-<!-- ══════ 学习路径 ══════ -->
-<div class="page on" id="pLearn"><div class="wrap" id="pathBox"></div></div>
+<nav class="bottom-nav" aria-label="移动端主导航">
+  <button class="is-active" data-view="learn"><svg><use href="#i-home"/></svg><span>学习</span></button>
+  <button data-view="review"><svg><use href="#i-review"/></svg><span>复习</span><em id="mobileDue">0</em></button>
+  <button data-view="library"><svg><use href="#i-book"/></svg><span>知识库</span></button>
+  <button data-view="growth"><svg><use href="#i-growth"/></svg><span>成长</span></button>
+</nav>
 
-<!-- ══════ 错题本 ══════ -->
-<div class="page" id="pReview"><div class="wrap">
-  <h2 style="margin:20px 0 4px;font-size:22px">错题本</h2>
-  <p class="tiny" style="margin-bottom:14px">旧题库已经清空，原错题与复习记录同时失效。</p>
-  <div id="reviewBox"></div>
-</div></div>
+<div class="modal" id="guideModal" aria-hidden="true"><div class="scrim" data-close-modal></div><section class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="guideTitle"><button class="icon-btn close-modal" data-close-modal><svg><use href="#i-close"/></svg></button><div id="guideContent"></div></section></div>
+<div class="modal" id="termModal" aria-hidden="true"><div class="scrim" data-close-modal></div><section class="modal-sheet term-sheet" role="dialog" aria-modal="true"><button class="icon-btn close-modal" data-close-modal><svg><use href="#i-close"/></svg></button><div id="termContent"></div></section></div>
+<div class="modal" id="lessonModal" aria-hidden="true"><div class="scrim" data-close-modal></div><section class="modal-sheet lesson-sheet" role="dialog" aria-modal="true" aria-labelledby="lessonPreviewTitle"><button class="icon-btn close-modal" data-close-modal><svg><use href="#i-close"/></svg></button><div id="lessonPreview"></div></section></div>
 
-<!-- ══════ 术语 ══════ -->
-<div class="page" id="pTerms"><div class="wrap">
-  <h2 style="margin:20px 0 4px;font-size:22px">术语速查</h2>
-  <p class="tiny">白皮书 v2.1 全量术语 <b id="tCount">0</b> 条；中文、英文、缩写和常用别名都能搜。</p>
-  <input class="search" id="tSearch" placeholder="搜术语、缩写或中文…　例：Fixture Recap / K&R / FWA" autocomplete="off">
-  <div class="termtools">
-    <select id="tCategory" aria-label="按类别筛选术语"><option value="">全部类别</option></select>
-    <span id="tShown">显示 0 / 0</span>
-  </div>
-  <div id="termBox"></div>
-  <div id="termMore"></div>
-</div></div>
+<section class="runner" id="runner" aria-hidden="true">
+  <header class="runner-head"><button class="icon-btn" id="runnerQuit" aria-label="退出课程"><svg><use href="#i-close"/></svg></button><div class="runner-progress"><i id="runnerBar"></i></div><div class="focus-pips" id="focusPips" aria-label="专注值"></div></header>
+  <main class="runner-body"><div class="question-wrap" id="questionWrap"></div></main>
+  <footer class="answer-dock" id="answerDock"><div class="answer-inner"><div class="feedback" id="feedback"></div><button class="answer-btn" id="answerBtn" disabled>请选择答案</button></div></footer>
+</section>
 
-<!-- ══════ 我的 ══════ -->
-<div class="page" id="pMe"><div class="wrap">
-  <h2 style="margin:20px 0 12px;font-size:22px">我的</h2>
-  <div class="card">
-    <div class="kv"><span>连续学习</span><b id="mStreak">0 天</b></div>
-    <div class="kv"><span>累计经验</span><b id="mXp">0 XP</b></div>
-    <div class="kv"><span>完成课程</span><b id="mDone">0 / 0</b></div>
-    <div class="kv"><span>错题待复习</span><b id="mWrong">0 道</b></div>
-  </div>
-  <div class="card">
-    <h3>装到 iPhone 主屏</h3>
-    <p>Safari 打开本页 → 点底部<b>分享</b>按钮 → 选<b>「添加到主屏幕」</b>。
-       之后从主屏图标进入就是全屏 App，<b>断网也能用</b>。</p>
-  </div>
-  <div class="card">
-    <h3>题库状态</h3>
-    <p><b>旧题已全部删除。</b>当前只保留 11 个单元、56 节路径骨架和术语速查，课程节点暂不可进入。</p>
-  </div>
-  <div class="card">
-    <h3>关于内容</h3>
-    <p class="tiny">学习路径和术语库参照《主流船型必须搞懂的知识白皮书》<b>v2.1</b>。
-       当前题目数量为 <b>0</b>，后续题库将从零重新设计。本 App <b>不含</b>公司未公开的逐船明细与合同价格。</p>
-  </div>
-  <button class="btn ghost" id="reset" style="margin-top:18px">清空进度重新开始</button>
-  <p class="tiny" style="text-align:center;margin-top:14px">Seacon Shipping / GVMI · 内部培训用</p>
-</div></div>
-
-<!-- ══════ 课程界面 ══════ -->
-<div id="lesson">
-  <div class="lhead">
-    <button id="quit" style="font-size:24px;color:var(--ink3);line-height:1">✕</button>
-    <div class="bar"><i id="lbar" style="width:0"></i></div>
-    <div class="hearts" id="lhearts">❤️❤️❤️❤️❤️</div>
-  </div>
-  <div class="lbody"><div class="in" id="lbody"></div></div>
-  <div class="fb" id="fb"><div class="in">
-    <div class="fbmsg" id="fbmsg" style="display:none"></div>
-    <button class="btn" id="act" disabled>选一个答案</button>
-  </div></div>
-</div>
-
-<!-- ══════ 底部导航 ══════ -->
-<div class="nav" id="nav">
-  <button data-p="pLearn" class="on"><i>🎯</i>学习</button>
-  <button data-p="pReview"><i>🔁</i>错题</button>
-  <button data-p="pTerms"><i>📖</i>术语</button>
-  <button data-p="pMe"><i>👤</i>我的</button>
-</div>
+<div class="toast-stack" id="toastStack" aria-live="polite"></div>
+<div class="celebration" id="celebration" aria-hidden="true"></div>
 
 <script src="data.js"></script>
 <script src="terms.js"></script>
